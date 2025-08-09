@@ -1376,6 +1376,10 @@ function sociometricStretcher(activityNumber){
         document.querySelectorAll(".bucket-block").forEach((block) => {
             block.style.display = "flex";
         });
+        const bucketSection = document.querySelector(".bucket-section");
+        const orderSection = document.querySelector(".order-section");
+        if (bucketSection) bucketSection.style.display = "flex";
+        if (orderSection) orderSection.style.display = "flex";
 
         const banner = document.querySelector(".activity-number-banner");
         if (banner) {

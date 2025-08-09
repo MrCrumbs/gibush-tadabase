@@ -1,5 +1,4 @@
 var initialElementGrades = document.querySelector("article div[ui-view]");
-var currentTeamNumberGrades = "{loggedInUser.צוות שטח}";
 var engToHebTranslations = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", "holes": "בורות",
     "holes_obstacle": "חפירת בור מכשול", "holes_personal_group": "חפירת בור אישי קבוצתי", "sacks": "שקים"
@@ -67,7 +66,7 @@ async function fetchGradesData(){
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                team_number: currentTeamNumberGrades,
+                team_number: "all",
                 activity_names: "sprints,crawls,sociometric_stretcher,sacks,holes"
             })
         });
@@ -87,28 +86,40 @@ async function fetchGradesData(){
 }
 
 function createTable(gradesData){
-    // Remove existing table
+    // Remove existing table and filters
     $('#grades-table-container').remove();
+    $('#team-filters-container').remove();
+    
+    // Create container for filters
+    const filtersContainer = $('<div id="team-filters-container"></div>');
+    $(initialElementGrades).after(filtersContainer);
     
     // Create container for the table
     const tableContainer = $('<div id="grades-table-container"></div>');
-    $(initialElementGrades).after(tableContainer);
+    filtersContainer.after(tableContainer);
     
-    // Transform data for Grid.js
-    const teamData = gradesData[currentTeamNumberGrades];
+    // Transform nested team data into flat structure with team info
+    const tableData = [];
+    const availableTeams = Object.keys(gradesData);
     
-    const tableData = Object.entries(teamData).map(([assesseeNumber, activities]) => {
-        const row = { 
-            assesseeNumber,
-            sprints: activities.sprints || '-',
-            crawls: activities.crawls || '-',
-            sociometric_stretcher: activities.sociometric_stretcher || '-',
-            sacks: activities.sacks || '-',
-            holes: activities.holes || '-',
-            final_grade: activities.final_grade || '-'
-        };
-        return row;
+    Object.entries(gradesData).forEach(([teamNumber, teamMembers]) => {
+        Object.entries(teamMembers).forEach(([assesseeNumber, activities]) => {
+            const row = { 
+                teamNumber,
+                assesseeNumber,
+                sprints: activities.sprints || '-',
+                crawls: activities.crawls || '-',
+                sociometric_stretcher: activities.sociometric_stretcher || '-',
+                sacks: activities.sacks || '-',
+                holes: activities.holes || '-',
+                final_grade: activities.final_grade || '-'
+            };
+            tableData.push(row);
+        });
     });
+    
+    // Create team filter buttons
+    createTeamFilters(availableTeams, filtersContainer);
     
     // Helper function to get grade color class
     function getGradeClass(grade) {
@@ -189,7 +200,7 @@ function createTable(gradesData){
     ];
     
     // Create Grid.js instance
-    const grid = new gridjs.Grid({
+    window.gradesGrid = new gridjs.Grid({
         data: tableData,
         columns: columns,
         height: "400px", 
@@ -224,4 +235,49 @@ function createTable(gradesData){
         fixedHeader: true
     }).render(document.getElementById('grades-table-container'));
     
+    // Store original data for filtering
+    window.originalTableData = tableData;
+}
+
+// Function to create team filter buttons
+function createTeamFilters(teams, container) {
+    const filtersHtml = `
+        <div class="team-filters">
+            <label class="filter-label">סינון לפי צוות:</label>
+            <button class="team-filter-btn active" data-team="all">כל הצוותים</button>
+            ${teams.map(team => `<button class="team-filter-btn" data-team="${team}">צוות ${team}</button>`).join('')}
+        </div>
+    `;
+    
+    container.html(filtersHtml);
+    
+    // Add event listeners for filter buttons
+    container.find('.team-filter-btn').on('click', function() {
+        const selectedTeam = $(this).data('team');
+        
+        // Update active button
+        container.find('.team-filter-btn').removeClass('active');
+        $(this).addClass('active');
+        
+        // Filter the table data
+        filterTableByTeam(selectedTeam);
+    });
+}
+
+// Function to filter table by team
+function filterTableByTeam(teamNumber) {
+    if (!window.gradesGrid || !window.originalTableData) return;
+    
+    let filteredData;
+    if (teamNumber === 'all') {
+        filteredData = window.originalTableData;
+    } else {
+        // Convert both to strings to ensure proper comparison
+        filteredData = window.originalTableData.filter(row => String(row.teamNumber) === String(teamNumber));
+    }
+    
+    // Update the grid with filtered data
+    window.gradesGrid.updateConfig({
+        data: filteredData
+    }).forceRender();
 }

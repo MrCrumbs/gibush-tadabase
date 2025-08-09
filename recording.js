@@ -12,6 +12,7 @@ TB.render('component_3', function(data) {
         
         // Add comments column to the table
         addCommentsColumn();
+        trun();
     });
 });
 
@@ -75,17 +76,14 @@ function getAssesseeNumberFromRow(row) {
 async function updateAssesseeRecord(assesseeId, assesseeNumber, value) {
     try {
         // Prepare the payload for your backend
+        const assessor_name = "{loggedInUser.Name}";
         const payload = {
-            app: "gibush",
-            table_id: "JDXQ80QYRl",
-            record_id: assesseeId,
-            record_update: {
-                "field_1521": value
-            }
+            assessee_id: assesseeId,
+            comment: assessor_name + ": " + value
         };
         
         // Make the API call to your backend
-        const response = await fetch('https://misc-ten.vercel.app/update_record_in_tadabase', {
+        const response = await fetch('https://misc-ten.vercel.app/update_assessor_comments', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -373,3 +371,207 @@ async function transcribeRecording(audioBlob) {
         return null;
     }
 }
+
+function showMore(id, event) {
+    // Prevent the click from bubbling up to parent elements (which would open the editing modal)
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    
+    document.getElementById(id + 'Overflow').className = '';
+    document.getElementById(id + 'MoreLink').className = 'hidden';
+    document.getElementById(id + 'LessLink').className = '';
+}
+function showLess(id, event) {
+    // Prevent the click from bubbling up to parent elements (which would open the editing modal)
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    
+    document.getElementById(id + 'Overflow').className = 'hidden';
+    document.getElementById(id + 'MoreLink').className = '';
+    document.getElementById(id + 'LessLink').className = 'hidden';
+}
+
+// Helper function to strip HTML tags and get plain text content
+function getPlainTextContent(htmlString) {
+    // Create a temporary div element to parse HTML
+    var tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlString.replaceAll("&nbsp;", " ");
+    // Get text content without HTML tags
+    return tempDiv.textContent || tempDiv.innerText || '';
+}
+
+// Helper function to split HTML content at a specific text length
+// Returns an object with { truncated: "...", remainder: "..." }
+function truncateHtmlAtTextLength(htmlString, maxTextLength) {
+    var tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlString.replaceAll("&nbsp;", " ");
+    
+    // Get the plain text to find the split point
+    var plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    if (plainText.length <= maxTextLength) {
+        return {
+            truncated: htmlString,
+            remainder: ''
+        };
+    }
+    
+    // Find the text split point (at word boundary)
+    var splitPoint = maxTextLength;
+    var textToSplit = plainText.substring(0, maxTextLength);
+    var lastSpaceIndex = textToSplit.lastIndexOf(' ');
+    if (lastSpaceIndex > 0) {
+        splitPoint = lastSpaceIndex;
+    }
+    
+    // Now we need to find where this text position maps to in the HTML
+    var textPosition = 0;
+    var htmlPosition = 0;
+    var truncatedHtml = '';
+    var foundSplitPoint = false;
+    
+    function processNodes(node) {
+        if (foundSplitPoint) return;
+        
+        if (node.nodeType === Node.TEXT_NODE) {
+            var text = node.textContent;
+            
+            if (textPosition + text.length <= splitPoint) {
+                // This entire text node goes in the truncated part
+                truncatedHtml += text;
+                textPosition += text.length;
+            } else {
+                // This text node spans the split point
+                var charsFromThisNode = splitPoint - textPosition;
+                var truncatedText = text.substring(0, charsFromThisNode);
+                
+                // Try to break at word boundary within this node
+                var lastSpace = truncatedText.lastIndexOf(' ');
+                if (lastSpace > 0) {
+                    truncatedText = truncatedText.substring(0, lastSpace);
+                }
+                
+                truncatedHtml += truncatedText;
+                foundSplitPoint = true;
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            var tagName = node.tagName.toLowerCase();
+            var attributes = '';
+            
+            // Preserve attributes
+            for (var i = 0; i < node.attributes.length; i++) {
+                var attr = node.attributes[i];
+                attributes += ' ' + attr.name + '="' + attr.value + '"';
+            }
+            
+            truncatedHtml += '<' + tagName + attributes + '>';
+            
+            // Process child nodes
+            for (var j = 0; j < node.childNodes.length; j++) {
+                processNodes(node.childNodes[j]);
+                if (foundSplitPoint) break;
+            }
+            
+            truncatedHtml += '</' + tagName + '>';
+        }
+    }
+    
+    // Process all child nodes to build truncated HTML
+    for (var i = 0; i < tempDiv.childNodes.length; i++) {
+        processNodes(tempDiv.childNodes[i]);
+        if (foundSplitPoint) break;
+    }
+    
+    // Create remainder HTML by creating a new div with the original content
+    // and removing the truncated text from the beginning
+    var remainderDiv = document.createElement('div');
+    remainderDiv.innerHTML = htmlString.replaceAll("&nbsp;", " ");
+    var remainderPlainText = (remainderDiv.textContent || remainderDiv.innerText || '');
+    
+    // Find the actual split point in plain text
+    var truncatedPlainText = getPlainTextContent(truncatedHtml);
+    var actualSplitPoint = truncatedPlainText.length;
+    
+    // Skip any spaces at the split point
+    while (actualSplitPoint < remainderPlainText.length && remainderPlainText[actualSplitPoint] === ' ') {
+        actualSplitPoint++;
+    }
+    
+    // Extract remainder text
+    var remainderText = remainderPlainText.substring(actualSplitPoint);
+    
+    // Now rebuild the HTML structure with only the remainder text
+    var remainderHtml = htmlString.replaceAll("&nbsp;", " ");
+    
+    // Simple approach: create a temporary div, extract text, and find HTML that contains this text
+    var tempDiv2 = document.createElement('div');
+    tempDiv2.innerHTML = remainderHtml;
+    
+    // Remove text from the beginning until we have only the remainder
+    function removeTextFromBeginning(node, textToRemove) {
+        if (textToRemove <= 0) return 0;
+        
+        if (node.nodeType === Node.TEXT_NODE) {
+            var text = node.textContent;
+            if (text.length <= textToRemove) {
+                node.textContent = '';
+                return textToRemove - text.length;
+            } else {
+                node.textContent = text.substring(textToRemove);
+                return 0;
+            }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+            for (var i = 0; i < node.childNodes.length; i++) {
+                textToRemove = removeTextFromBeginning(node.childNodes[i], textToRemove);
+                if (textToRemove <= 0) break;
+            }
+            return textToRemove;
+        }
+        return textToRemove;
+    }
+    
+    removeTextFromBeginning(tempDiv2, actualSplitPoint);
+    var remainderHtmlResult = tempDiv2.innerHTML;
+    
+    return {
+        truncated: truncatedHtml,
+        remainder: " " +remainderHtmlResult
+    };
+}
+
+var trun = function(){
+    if(!$('.shrinkables').length){
+        var len = 40;
+        var shrinkables = $('tbody td span');
+        if (shrinkables.length > 0) {
+            for (var i = 0; i < shrinkables.length; i++) {
+                var fullText = shrinkables[i].innerHTML.replaceAll("&nbsp;", " ");
+                var plainText = getPlainTextContent(fullText);
+                console.log("fullText:", fullText);
+                console.log("plainText:", plainText);
+                console.log("plainText length:", plainText.length);
+                
+                // Use plain text length for comparison, but keep full HTML for display
+                if (plainText.length > len && !fullText.includes("badge")) { //&& !$(shrinkables[i].offsetParent).hasClass('allow-inline-edit')
+                    // Find the truncation point in the original HTML based on plain text length
+                    var truncationResult = truncateHtmlAtTextLength(fullText, len);
+                    var id = 'shrinkable' + i;
+                    shrinkables[i].innerHTML = '<span class="shrinkables">' + truncationResult.truncated + '<span class="hidden" id="' + id + 'Overflow">' + truncationResult.remainder + '</span></span>&nbsp;<a id="' + id + 'MoreLink" style="cursor:pointer;color:blue;" onclick="showMore(\'' + id + '\', event);">הצג עוד</a><a class="hidden" style="cursor:pointer;color:blue;" id="' + id + 'LessLink" onclick="showLess(\'' + id + '\', event);">הצג פחות</a>';
+    
+                }
+            }
+        }
+    }
+};
+
+$('body, button').click(function(){
+    setTimeout(function(){
+        if($('.shrinkables').length === 0){
+             trun();
+        }
+    },500);
+});
