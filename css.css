@@ -519,6 +519,8 @@ display: flex;
 flex-direction: column;
 align-items: center;
 overflow: visible; /* Prevent overflow on brackets */
+transition: transform 0.2s ease-out, background-color 0.3s ease,
+border-color 0.3s ease;
 }
 
 .bracket-title {
@@ -1247,4 +1249,8 @@ body {
     .success-toast.show {
         transform: translateY(0);
     }
+}
+
+.dragging-target {
+  transform: scale(1.02);
 }

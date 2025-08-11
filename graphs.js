@@ -60,6 +60,7 @@ function draw_graph_hicharts(data) {
     // Add new chart container after #field_block_field_243
     $('<div id="hichartsJS"></div>').insertAfter($(initialElementGraphs));
 
+    data = data[currentTeamNumberGraphs];
     default_race_activities_to_draw.forEach(activityName => {
         const chartContainerId = `hichart-${activityName}`;
         $('#hichartsJS').append(`<div id="${chartContainerId}" style="margin-bottom:50px;"></div>`);
@@ -73,18 +74,24 @@ function draw_graph_hicharts(data) {
         ].sort((a, b) => a - b);
 
         // Step 2: Build series
-        const series = Object.entries(data).map(([competitor, activities]) => {
-            const places = allNumbers.map(num => {
-                return activities?.[activityName]?.[String(num)] ?? null;
-            });
+        const series = Object.entries(data)
+            .filter(([competitor, activities]) => {
+                // Only include competitors who have data for this activity
+                return activities?.[activityName]?.places && 
+                       Object.keys(activities[activityName].places).length > 0;
+            })
+            .map(([competitor, activities]) => {
+                const places = allNumbers.map(num => {
+                    return activities?.[activityName]?.[String(num)] ?? null;
+                });
 
-            return {
-                name: competitor,
-                data: places,
-                connectNulls: false,
-                visible: false
-            };
-        });
+                return {
+                    name: competitor,
+                    data: places,
+                    connectNulls: false,
+                    visible: false
+                };
+            });
 
         // Step 3: Draw chart
         Highcharts.chart(chartContainerId, {
@@ -165,14 +172,20 @@ function draw_graph_hicharts(data) {
         );
         
         // Prepare series data for each user
-        const series = Object.entries(data).map(([competitor, activities]) => {
-          const categoryData = activities?.[activityName]?.aggregated_categories || {};
-          return {
-            name: competitor,
-            data: allCategories.map(cat => categoryData[cat] ?? 0), // fill missing with 0
-            visible: false  // start hidden
-          };
-        });
+        const series = Object.entries(data)
+            .filter(([competitor, activities]) => {
+                // Only include competitors who have data for this activity
+                return activities?.[activityName]?.aggregated_categories && 
+                       Object.keys(activities[activityName].aggregated_categories).length > 0;
+            })
+            .map(([competitor, activities]) => {
+              const categoryData = activities?.[activityName]?.aggregated_categories || {};
+              return {
+                name: competitor,
+                data: allCategories.map(cat => categoryData[cat] ?? 0), // fill missing with 0
+                visible: false  // start hidden
+              };
+            });
         
         Highcharts.chart(chartContainerId, {
             chart: {

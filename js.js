@@ -767,6 +767,10 @@ function sacks(){
 }
 
 function sociometricStretcher(activityNumber){
+    const brackets = [];
+    let autoScrollInterval = null;
+    let lastBucketDragTargetBracket = null;
+
     // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
@@ -884,65 +888,38 @@ function sociometricStretcher(activityNumber){
 
         return blockWrapper;
     }
-    
-    const brackets = [];
-    const limits = (assesseeNumbers.length > 19) ? [8, 2, 4] : [4, 2, 4];
-    const limitTitles = ["לקחו אלונקה", "לקחו ג'ריקן", "מקום ראשון"];
-    
-    for (let i = 0; i < limits.length; i++) {
-        const bracket = document.createElement("div");
-        bracket.className = "bracket";
-        
-        const currentLimit = limits[i];
-        bracket.setAttribute("data-max-capacity", currentLimit);
-        
-        const bracketTitle = document.createElement("div");
-        bracketTitle.className = "bracket-title";
-        bracketTitle.textContent = `${limitTitles[i]} (${limits[i]} מוערכים)`;
 
-        bracket.appendChild(bracketTitle);
-        orderSection.appendChild(bracket);
-        brackets.push(bracket);
-        
-        bracket.addEventListener("dragover", (e) => {e.preventDefault();
-            const elementBelow = e.target.closest(".block-wrapper");
-            const isFull = bracket.querySelectorAll(".block-wrapper").length >= parseInt(bracket.dataset.maxCapacity);
-            const previousTarget = document.querySelector(".replace-target");
-            if (previousTarget && previousTarget !== elementBelow) {
-                previousTarget.classList.remove("replace-target");
-            }
-            if (isFull && elementBelow) {
-                elementBelow.classList.add("replace-target");
-            }
-        });
-        
-        bracket.addEventListener("dragleave", (e) => {
-            e.target.closest(".block-wrapper")?.classList.remove("replace-target");
-        });
-
-        bracket.addEventListener("drop", (e) => {
-            e.preventDefault();
-            const number = e.dataTransfer.getData("text/plain");
-            if (!number) return;
-            document.querySelectorAll(".replace-target").forEach((el) => el.classList.remove("replace-target"));
-            const targetBlock = e.target.closest(".block-wrapper");
-            const isFull = bracket.querySelectorAll(".block-wrapper").length >= parseInt(bracket.dataset.maxCapacity);
-            if (targetBlock && isFull) {
-                const nextSibling = targetBlock.nextElementSibling;
-                returnToBucket(targetBlock);
-                createBlockInBracket(number, bracket, nextSibling);
-            } 
-            else {
-                createBlockInBracket(number, bracket);
-            }
-        });
+    function manageAutoScroll(clientY) {
+        const margin = 80, speed = 8;
+        if (clientY > margin && clientY < window.innerHeight - margin) {
+            stopAutoScroll();
+            return;
+        }
+        if (autoScrollInterval) return;
+        if (clientY < margin) {
+            autoScrollInterval = setInterval(() => {
+                document.documentElement.scrollTop -= speed;
+                document.body.scrollTop -= speed;
+            }, 15);
+        } 
+        else if (clientY > window.innerHeight - margin) {
+            autoScrollInterval = setInterval(() => {
+                document.documentElement.scrollTop += speed;
+                document.body.scrollTop += speed;
+            }, 15);
+        }
+    }
+    function stopAutoScroll() {
+        if (autoScrollInterval) {
+            clearInterval(autoScrollInterval);
+            autoScrollInterval = null;
+        }
     }
     
     let draggedBucketItem = null;
     let ghostBucketItem = null;
     let isDraggingBucket = false;
     let startXBucket, startYBucket;
-    let bucketAutoScrollInterval = null;
     
     const handleBucketTouchMove = (e) => {
         if (!isDraggingBucket) {
@@ -968,56 +945,39 @@ function sociometricStretcher(activityNumber){
         ghostBucketItem.style.left = `${touch.pageX - ghostBucketItem.offsetWidth / 2}px`;
         ghostBucketItem.style.top = `${touch.pageY - ghostBucketItem.offsetHeight / 2}px`;
 
-        const clientY = touch.clientY;
-
-        const margin = 80;
-        const speed = 8;
-        if (clientY < margin) {
-            if (!bucketAutoScrollInterval) {
-                bucketAutoScrollInterval = setInterval(() => {
-                    document.documentElement.scrollTop -= speed;
-                    document.body.scrollTop -= speed;
-                }, 15);
-            }
-        } 
-        else if (clientY > window.innerHeight - margin) {
-            if (!bucketAutoScrollInterval) {
-                bucketAutoScrollInterval = setInterval(() => {
-                    document.documentElement.scrollTop += speed;
-                    document.body.scrollTop += speed;
-                }, 15);
-            }
-        } 
-        else {
-            if (bucketAutoScrollInterval) {
-                clearInterval(bucketAutoScrollInterval);
-                bucketAutoScrollInterval = null;
-            }
-        }
+        manageAutoScroll(touch.clientY);
+        ghostBucketItem.style.display = "none";
         const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+        ghostBucketItem.style.display = "";
+        const newTargetBracket = elementBelow?.closest(".bracket");
+        // Check if the new target bracket is different from the last target bracket
+        if (newTargetBracket !== lastBucketDragTargetBracket) {
+            // If so, remove the dragging target class from the last target bracket
+            // and add it to the new target bracket
+            if (lastBucketDragTargetBracket)
+                lastBucketDragTargetBracket.classList.remove("dragging-target");
+            if (newTargetBracket) newTargetBracket.classList.add("dragging-target");
+                lastBucketDragTargetBracket = newTargetBracket;
+        }
+
         const currentTarget = elementBelow?.closest(".block-wrapper");
         const previousTarget = document.querySelector(".replace-target");
-        if (previousTarget && previousTarget !== currentTarget) {
+        if (previousTarget && previousTarget !== currentTarget)
             previousTarget.classList.remove("replace-target");
-        }
-        const targetBracket = currentTarget?.closest(".bracket");
-        if (targetBracket && currentTarget) {
-            const capacity = parseInt(targetBracket.dataset.maxCapacity);
-            const currentSize = targetBracket.querySelectorAll(".block-wrapper").length;
-            if (currentSize >= capacity) {
+        if (newTargetBracket && currentTarget) {
+            const capacity = parseInt(newTargetBracket.dataset.maxCapacity);
+            if (newTargetBracket.querySelectorAll(".block-wrapper").length >= capacity) {
                 currentTarget.classList.add("replace-target");
             }
         }
     };
     
     const handleBucketTouchEnd = (e) => {
-        if (bucketAutoScrollInterval) {
-            clearInterval(bucketAutoScrollInterval);
-            bucketAutoScrollInterval = null;
-        }
+        stopAutoScroll();
 
         document.body.classList.remove("no-touch-actions");
-        document.querySelectorAll(".replace-target").forEach((el) => el.classList.remove("replace-target"));
+        document.querySelectorAll(".replace-target, .dragging-target").forEach((el) => el.classList.remove("replace-target", "dragging-target"));
+        lastBucketDragTargetBracket = null;
 
         if (isDraggingBucket) {
             const touch = e.changedTouches[0];
@@ -1039,9 +999,8 @@ function sociometricStretcher(activityNumber){
             }
         }
         
-        if (ghostBucketItem?.parentNode) {
-          document.body.removeChild(ghostBucketItem);
-        }
+        if (ghostBucketItem?.parentNode)
+            ghostBucketItem.remove();
         
         draggedBucketItem = null;
         ghostBucketItem = null;
@@ -1050,44 +1009,9 @@ function sociometricStretcher(activityNumber){
         document.removeEventListener("touchmove", handleBucketTouchMove);
     };
     
-    document.querySelectorAll(".bucket-block").forEach((block) => {
-        block.addEventListener("dragstart", (e) => {
-            e.dataTransfer.setData("text/plain", block.dataset.number);
-        });
-    
-        block.addEventListener("touchstart", (e) => {
-            if (block.style.display === "none") return;
-            e.preventDefault();
-            draggedBucketItem = block;
-            isDraggingBucket = false;
-            const touch = e.touches[0];
-            startXBucket = touch.clientX;
-            startYBucket = touch.clientY;        
-            document.addEventListener("touchmove", handleBucketTouchMove, {
-                passive: false,
-            });
-            document.addEventListener("touchend", handleBucketTouchEnd, {
-                once: true,
-            });
-        },
-        { passive: false }
-        );
-    });
-    
     function initDrag(el) {
-        let offsetY;
-        let currentClone = null;
-
-        let originalParent = null;
-        let originalNextSibling = null;
-        let isDraggingBracket = false;
-        let startXBracket, startYBracket;
-        let autoScrollInterval = null;
-        
-        const getClientCoords = (e) => {
-            const touch = e.touches?.[0] || e.changedTouches?.[0] || e;
-            return { clientX: touch.clientX, clientY: touch.clientY };
-        };
+        let offsetY, currentClone, originalParent, originalNextSibling, isDraggingBracket = false, startXBracket, startYBracket, lastTargetBracket = null;
+        const getClientCoords = (e) => e.touches?.[0] || e.changedTouches?.[0] || e;
         
         const move = (e) => {
             if (!isDraggingBracket) {
@@ -1122,38 +1046,25 @@ function sociometricStretcher(activityNumber){
 
             const { clientX, clientY } = getClientCoords(e);
             currentClone.style.top = `${clientY - offsetY}px`;
-            const margin = 80;
-            const speed = 8;
-            if (clientY < margin) {
-                if (!autoScrollInterval) {
-                    autoScrollInterval = setInterval(() => {
-                        document.documentElement.scrollTop -= speed;
-                        document.body.scrollTop -= speed;
-                    }, 15);
-                }
-            } 
-            else if (clientY > window.innerHeight - margin) {
-                if (!autoScrollInterval) {
-                    autoScrollInterval = setInterval(() => {
-                        document.documentElement.scrollTop += speed;
-                        document.body.scrollTop += speed;
-                    }, 15);
-                }
-            } else {
-                if (autoScrollInterval) {
-                    clearInterval(autoScrollInterval);
-                    autoScrollInterval = null;
-                }
-            }
+            manageAutoScroll(clientY);
+
             currentClone.style.display = "none";
             const elementBelow = document.elementFromPoint(clientX, clientY);
             currentClone.style.display = "";
             const currentTarget = elementBelow?.closest(".block-wrapper");
             const previousTarget = document.querySelector(".replace-target");
-            if (previousTarget && previousTarget !== currentTarget) {
+            if (previousTarget && previousTarget !== currentTarget)
                 previousTarget.classList.remove("replace-target");
-            }
             const newParentBracket = elementBelow?.closest(".bracket");          
+            // Check if the new parent bracket is different from the last target bracket
+            if (newParentBracket !== lastTargetBracket) {
+                // If so, remove the dragging target class from the last target bracket
+                // and add it to the new parent bracket
+                if (lastTargetBracket)
+                    lastTargetBracket.classList.remove("dragging-target");
+                if (newParentBracket) newParentBracket.classList.add("dragging-target");
+                    lastTargetBracket = newParentBracket;
+            }
             if (!newParentBracket) return;
             const capacity = parseInt(newParentBracket.dataset.maxCapacity);
             const currentSize = newParentBracket.querySelectorAll(".block-wrapper:not(.dragging)").length;
@@ -1169,10 +1080,12 @@ function sociometricStretcher(activityNumber){
             }
         };
         
-        const endDrag = (e) => {
-            if (autoScrollInterval) {
-                clearInterval(autoScrollInterval);
-                autoScrollInterval = null;
+        const endDrag = () => {
+            stopAutoScroll();
+            // Remove the dragging target class from the last target bracket
+            if (lastTargetBracket) {
+                lastTargetBracket.classList.remove("dragging-target");
+                lastTargetBracket = null;
             }
             if (isDraggingBracket) {
                 const blockToSwap = document.querySelector(".replace-target");
@@ -1196,10 +1109,8 @@ function sociometricStretcher(activityNumber){
         };
         
         const startDrag = (e) => {
-            if (e.target.classList.contains("remove-button")) {
+            if (e.target.classList.contains("remove-button") || (e.button && e.button !== 0))
                 return;
-            }
-            if (e.button && e.button !== 0) return;
             e.preventDefault();
             originalParent = el.parentElement;
             originalNextSibling = el.nextElementSibling;
@@ -1253,6 +1164,101 @@ function sociometricStretcher(activityNumber){
         updateResultsStrings();
         updateBucketVisibility();
     }
+
+    const limits = (assesseeNumbers.length > 19) ? [8, 2, 4] : [4, 2, 4];
+    const limitTitles = ["לקחו אלונקה", "לקחו ג'ריקן", "מקום ראשון"];
+    for (let i = 0; i < limits.length; i++) {
+        const bracket = document.createElement("div");
+        bracket.className = "bracket";
+        
+        const currentLimit = limits[i];
+        bracket.setAttribute("data-max-capacity", currentLimit);
+        
+        const bracketTitle = document.createElement("div");
+        bracketTitle.className = "bracket-title";
+        bracketTitle.textContent = `${limitTitles[i]} (${limits[i]} מוערכים)`;
+
+        bracket.appendChild(bracketTitle);
+        orderSection.appendChild(bracket);
+        brackets.push(bracket);
+
+        bracket.addEventListener("dragenter", (e) => {
+            e.preventDefault();
+            if (lastBucketDragTargetBracket !== bracket) {
+                if (lastBucketDragTargetBracket)
+                    lastBucketDragTargetBracket.classList.remove("dragging-target");
+                bracket.classList.add("dragging-target");
+                lastBucketDragTargetBracket = bracket;
+            }
+        });
+
+        bracket.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            manageAutoScroll(e.clientY);
+            const elementBelow = e.target.closest(".block-wrapper");
+            const isFull = bracket.querySelectorAll(".block-wrapper").length >= parseInt(bracket.dataset.maxCapacity);
+            if (isFull && elementBelow) {
+                elementBelow.classList.add("replace-target");
+            }
+        });
+        
+        bracket.addEventListener("dragleave", (e) => {
+            if (e.relatedTarget && !bracket.contains(e.relatedTarget)) {
+                bracket.classList.remove("dragging-target");
+                if (lastBucketDragTargetBracket === bracket)
+                    lastBucketDragTargetBracket = null;
+            }
+            stopAutoScroll();
+        });
+
+        bracket.addEventListener("drop", (e) => {
+            e.preventDefault();
+            stopAutoScroll();
+            // Remove the dragging target class from all elements
+            document.querySelectorAll(".replace-target, .dragging-target").forEach((el) =>
+                el.classList.remove("replace-target", "dragging-target")
+            );
+            lastBucketDragTargetBracket = null;
+            const number = e.dataTransfer.getData("text/plain");
+            if (!number) return;
+            const targetBlock = e.target.closest(".block-wrapper");
+            const isFull = bracket.querySelectorAll(".block-wrapper").length >= parseInt(bracket.dataset.maxCapacity);
+            if (targetBlock && isFull) {
+                const nextSibling = targetBlock.nextElementSibling;
+                returnToBucket(targetBlock);
+                createBlockInBracket(number, bracket, nextSibling);
+            } 
+            else {
+                createBlockInBracket(number, bracket);
+            }
+        });
+    }
+
+    document.querySelectorAll(".bucket-block").forEach((block) => {
+        block.addEventListener("dragstart", (e) =>
+            e.dataTransfer.setData("text/plain", block.dataset.number)
+        );
+        block.addEventListener("dragend", () => {
+            if (lastBucketDragTargetBracket)
+                lastBucketDragTargetBracket.classList.remove("dragging-target");
+            lastBucketDragTargetBracket = null;
+            stopAutoScroll();
+        });
+        block.addEventListener("touchstart", (e) => {
+            if (block.style.display === "none") return;
+            e.preventDefault();
+            draggedBucketItem = block;
+            isDraggingBucket = false;
+            const touch = e.touches[0];
+            startXBucket = touch.clientX;
+            startYBucket = touch.clientY;
+            document.addEventListener("touchmove", handleBucketTouchMove, {passive: false,});
+            document.addEventListener("touchend", handleBucketTouchEnd, {once: true,});
+        },
+        { passive: false }
+        );
+    });
+
     // Back to menu button event handler
     backButton.addEventListener("click", () => {
         // Remove all game content (button container and game layout)
@@ -1369,13 +1375,11 @@ function sociometricStretcher(activityNumber){
 
     function resetGame(){
         brackets.forEach((br) => {
-            const title = br.querySelector(".bracket-title");
-            br.innerHTML = "";
-            if (title) br.appendChild(title);
+            br.querySelectorAll(".block-wrapper").forEach((wrapper) =>
+                returnToBucket(wrapper)
+            );
         });
-        document.querySelectorAll(".bucket-block").forEach((block) => {
-            block.style.display = "flex";
-        });
+
         const bucketSection = document.querySelector(".bucket-section");
         const orderSection = document.querySelector(".order-section");
         if (bucketSection) bucketSection.style.display = "flex";
@@ -1386,7 +1390,7 @@ function sociometricStretcher(activityNumber){
             console.log ("in resetGame, displaying banner with activity number: ", activityNumber);
             banner.textContent = `מקצה נוכחי: ${activityNumber}`;
         }
-        
+
         updateUI();
     }
 }

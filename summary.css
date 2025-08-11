@@ -1,0 +1,90 @@
+.nav-tabs>li{
+    float: right !important;
+}
+.nav-tabs>li>a{
+    border: 1px solid #b3adad !important;
+}
+.rtl-direction{
+    direction: rtl;
+}
+.btn{
+    direction: rtl;
+}
+.table-wrap {
+    position: relative;
+    width: 100%;
+    z-index: 1;
+    margin: auto;
+    overflow: auto;
+    height: 750px;
+}
+
+.table-wrap table {
+    width: 100%;
+    min-width: 1280px;
+    margin: auto;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-wrap {
+    position: relative;
+}
+
+.table-wrap th,
+.table-wrap td {
+    padding: 5px 10px;
+    border: 1px solid #000;
+    background: #fff;
+    vertical-align: top;
+}
+
+.table-wrap thead th {
+    background: #333;
+    color: #fff;
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+}
+
+.table-wrap .table-row-summery,
+.table-wrap .table-row-summery th,
+.table-wrap .table-row-summery td {
+    position: -webkit-sticky;
+    position: sticky;
+    bottom: 0;
+    background: #666;
+    color: #fff;
+    z-index: 4;
+}
+td:nth-child(1), th:first-child {
+    position: -webkit-sticky;
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #ccc;
+}
+
+thead th:first-child,
+.table-row-summery td:first-child {
+    z-index: 5;
+}
+
+/* Action column styling */
+.table-wrap th:last-child,
+.table-wrap td:last-child {
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* Ensure action buttons are centered in their cells */
+.table-wrap td:last-child .action-btn {
+    display: inline-block;
+    margin: 0 auto;
+}
+
+/* Action button specific styling */
+.action-btn {
+    margin: 2px;
+}
+

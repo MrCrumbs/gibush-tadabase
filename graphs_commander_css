@@ -1,0 +1,33 @@
+#hichartsJS{
+  width: 100%;       /* Allow flexible width */
+  max-width: 600px;
+  height: 300px; 
+  margin-left: auto;
+  margin-right: 0;
+  display: block;
+}
+
+#team-filter-container {
+  margin-bottom: 20px;
+  text-align: center;
+  direction: rtl;
+}
+
+.team-filter-btn {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  margin: 0 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.team-filter-btn.active {
+  background-color: #007bff;
+}
+
+.team-filter-btn:hover {
+  opacity: 0.8;
+}
