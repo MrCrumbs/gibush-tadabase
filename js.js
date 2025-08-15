@@ -297,6 +297,12 @@ function holesObstacleOrPersonalGroup(activityName){
     resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
     topButtonContainer.appendChild(resetButton);
     
+    // Create instructions div
+    const instructionsDiv = document.createElement("div");
+    instructionsDiv.className = "instructions";
+    instructionsDiv.textContent = "דרג כל מוערך בכל תחום מ־1 (נמוך) עד 6 (גבוה).";
+    initialElement.appendChild(instructionsDiv);
+    
     // Create main container
     const holesContainer = document.createElement("div");
     holesContainer.className = "holes-container";
@@ -486,12 +492,13 @@ function holesObstacleOrPersonalGroup(activityName){
         submitContainer.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
+        instructionsDiv.remove();
 
         // Reset current game
         currentGame = null;
         
         // Display main menu
-        displayMenu();
+        displayHolesSubMenu();
     });
     
     // Reset button event
@@ -537,6 +544,7 @@ function holesObstacleOrPersonalGroup(activityName){
                 submitContainer.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
+                instructionsDiv.remove();
                 
                 // Reset current game
                 currentGame = null;
@@ -587,6 +595,12 @@ function sacks(){
     resetButton.className = "reset-button";
     resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
     topButtonContainer.appendChild(resetButton);
+    
+    // Create instructions div
+    const instructionsDiv = document.createElement("div");
+    instructionsDiv.className = "instructions";
+    instructionsDiv.textContent = "הוסיפו סיבוב למוערך בכל פעם שהוא משלים הקפה.";
+    initialElement.appendChild(instructionsDiv);
     
     // Create main container
     const sacksContainer = document.createElement("div");
@@ -663,6 +677,8 @@ function sacks(){
         submitContainer.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
+        instructionsDiv.remove();
+
         // Reset current game
         currentGame = null;
         
@@ -728,6 +744,7 @@ function sacks(){
                 submitContainer.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
+                instructionsDiv.remove();
                 
                 // Display main menu
                 displayMenu();
@@ -799,6 +816,12 @@ function sociometricStretcher(activityNumber){
     resetButton.className = "reset-button";
     resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
     topButtonContainer.appendChild(resetButton);
+    
+    // Create instructions div
+    const instructionsDiv = document.createElement("div");
+    instructionsDiv.className = "instructions";
+    instructionsDiv.textContent = "גררו כל מוערך לריבוע לפי המשימה שביצע.";
+    initialElement.appendChild(instructionsDiv);
 
     const gameLayout = document.createElement("div");
     gameLayout.className = "game-layout";
@@ -1267,13 +1290,15 @@ function sociometricStretcher(activityNumber){
         const submitContainer = initialElement.querySelector('.submit-container');
         const activityNumberBanner = initialElement.querySelector('.activity-number-banner');
         const activityNameDisplay = initialElement.querySelector('.activity-name-banner');
+        const instructionsDiv = initialElement.querySelector('.instructions');
 
         if (buttonContainer) buttonContainer.remove();
         if (gameLayout) gameLayout.remove();
         if (submitContainer) submitContainer.remove();
         if (activityNumberBanner) activityNumberBanner.remove();
         if (activityNameDisplay) activityNameDisplay.remove();
-
+        if (instructionsDiv) instructionsDiv.remove();
+        
         // Reset current game
         currentGame = null;
         
@@ -1434,6 +1459,12 @@ function sprintsOrCrawls(activityName, activityNumber){
     resetButton.className = "reset-button";
     resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
     topButtonContainer.appendChild(resetButton);
+    
+    // Create instructions div
+    const instructionsDiv = document.createElement("div");
+    instructionsDiv.className = "instructions";
+    instructionsDiv.textContent = "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון.";
+    initialElement.appendChild(instructionsDiv);
     
     const gameLayout = document.createElement("div");
     gameLayout.className = "game-layout";
@@ -1670,13 +1701,15 @@ function sprintsOrCrawls(activityName, activityNumber){
         const submitContainer = initialElement.querySelector('.submit-container');
         const activityNumberBanner = initialElement.querySelector('.activity-number-banner');
         const activityNameDisplay = initialElement.querySelector('.activity-name-banner');
+        const instructionsDiv = initialElement.querySelector('.instructions');
         
         if (buttonContainer) buttonContainer.remove();
         if (gameLayout) gameLayout.remove();
         if (submitContainer) submitContainer.remove();
         if (activityNumberBanner) activityNumberBanner.remove();
         if (activityNameDisplay) activityNameDisplay.remove();
-        
+        if (instructionsDiv) instructionsDiv.remove();
+
         // Reset current game
         currentGame = null;
         
