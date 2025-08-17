@@ -174,7 +174,7 @@ function displayActivitiesList() {
     
     const title = document.createElement("h2");
     title.className = "page-title";
-    title.textContent = "תיקון מקצים";
+    title.textContent = "תיקון תרגילים";
     container.appendChild(title);
     
     const activitiesList = document.createElement("div");

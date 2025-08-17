@@ -16,7 +16,9 @@ var engToHeb = {
 
 TB.render("component_9", async function (data) {
 
-    initialSetup();
+    if(!initialSetup()){
+        return;
+    }
     
     if (currentGame === null) {
         showLoading();
@@ -139,8 +141,9 @@ function initialSetup(){
 
     if(!currentTeamNumber){
         alert("המשתמש לא מחובר, נא להתחבר ולנסות שוב");
-        return;
+        return false;
     }
+    return true;
 }
 
 function displayMenu(){
@@ -268,7 +271,7 @@ function holesObstacleOrPersonalGroup(activityName){
     
     if (holesActivities.length > 0) {
         // Activity has already been submitted
-        alert("מקצה זה כבר הוגש. לתיקון המקצה, עבור לעמוד תיקון מקצים בתפריט.");
+        alert("מקצה זה כבר הוגש. לתיקון המקצה, עבור לעמוד תיקון תרגילים בתפריט.");
         currentGame = null;
         displayHolesSubMenu();
         return;
@@ -567,7 +570,7 @@ function sacks(){
     
     if (sacksActivities.length > 0) {
         // Sacks activity has already been submitted
-        alert("מקצה השקים כבר הוגש. לתיקון המקצה, עבור לעמוד תיקון מקצים בתפריט.");
+        alert("מקצה השקים כבר הוגש. לתיקון המקצה, עבור לעמוד תיקון תרגילים בתפריט.");
         currentGame = null;
         displayMenu();
         return;

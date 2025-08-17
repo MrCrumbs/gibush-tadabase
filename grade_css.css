@@ -6,7 +6,7 @@
 
 #grades-table-container {
     direction: rtl;
-    margin-top: 20px;
+    /* margin-top: 20px; */
     overflow-x: auto;
     max-width: 100%;
 }

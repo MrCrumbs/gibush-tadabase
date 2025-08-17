@@ -192,10 +192,12 @@ function createTable(gradesData){
     const grid = new gridjs.Grid({
         data: tableData,
         columns: columns,
-        height: "400px", 
-        pagination: {
-            limit: 35
-        },
+        // height: "400px", 
+        height: "calc(100vh - 100px)",
+        // pagination: {
+        //     limit: 35
+        // },
+        pagination: false,
         search: true,
         sort: true,
         language: {
