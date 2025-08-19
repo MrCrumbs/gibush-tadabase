@@ -1,0 +1,165 @@
+/* Grades Table Styles */
+
+.gridjs-search{
+    float: right;
+}
+
+#grades-table-container {
+    direction: rtl;
+    /* margin-top: 20px; */
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+#loading-spinner {
+    margin-top: 10px;
+    text-align: center;
+}
+
+#no-data-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+    font-size: 16px;
+}
+
+#no-data-message i {
+    font-size: 48px;
+    color: #ddd;
+    margin-bottom: 16px;
+}
+
+#error-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #d32f2f;
+    font-size: 16px;
+}
+
+#error-message i {
+    font-size: 48px;
+    color: #d32f2f;
+    margin-bottom: 16px;
+}
+
+/* Search container styles */
+.grades-search-container {
+    margin-bottom: 15px;
+    text-align: center;
+}
+
+#grades-search {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 14px;
+    direction: rtl;
+}
+
+/* Export container styles */
+.grades-export-container {
+    margin-top: 15px;
+    text-align: center;
+}
+
+.export-button {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    margin: 0 5px;
+    cursor: pointer;
+    direction: rtl;
+}
+
+.export-button.pdf {
+    background: #dc3545;
+}
+
+.export-button:hover {
+    opacity: 0.9;
+}
+
+/* Grid.js table styles */
+.grades-table {
+    width: 100%;
+    border-collapse: collapse;
+    direction: rtl;
+    overflow-x: auto;
+}
+
+.grades-table td:first-child,
+.grades-table th:first-child {
+  position: sticky;
+  right: 0;
+  background: white;
+  z-index: 10;
+  border-right: 1px solid #ddd;
+}
+
+.grades-table th:first-child {
+  z-index: 11; /* Higher z-index for header */
+  background: #f8f9fa; /* Or whatever your header background is */
+}
+
+.grades-header {
+    background-color: #f8f9fa;
+    padding: 12px 8px;
+    text-align: center;
+    font-weight: bold;
+    border: 1px solid #dee2e6;
+    direction: rtl;
+}
+
+.grades-cell {
+    padding: 8px;
+    text-align: center;
+    border: 1px solid #dee2e6;
+    direction: rtl;
+}
+
+.grade-excellent {
+    background-color: #28a745;
+    color: white;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-weight: bold;
+}
+
+.grade-average {
+    background-color: #ffc107;
+    color: white;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-weight: bold;
+}
+
+.grade-failing {
+    background-color: #dc3545;
+    color: white;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-weight: bold;
+}
+
+.grade-no-data {
+    color: #6c757d;
+    font-style: italic;
+}
+
+.grades-table td:nth-child(2),
+.grades-table th:nth-child(2) {
+    font-weight: bold;
+    border: 1px solid #262d35;
+    background-color: #daf8ff;
+    /* background-color: #f8f9ff; */
+}
+
+.grades-table th:nth-child(2) {
+    /* background-color: #e3f2fd; */
+    /*color: #262d35;*/
+    font-weight: bold;
+}
