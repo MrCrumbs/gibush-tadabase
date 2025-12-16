@@ -16,46 +16,107 @@ TB.render('component_3', function(data) {
     });
 });
 
-// Global variable to store the assessee mapping
-let assesseeMapping = new Map();
-
-// Store the original XHR open method
-const originalOpen = XMLHttpRequest.prototype.open;
-const originalSend = XMLHttpRequest.prototype.send;
-
-XMLHttpRequest.prototype.open = function () {
-  this.addEventListener("load", function () {
-    try {
-      const response = JSON.parse(this.responseText);
-      console.log("Tadabase response:", response);
-      
-      // Check if this is the assessee data response
-      if (response.items && Array.isArray(response.items)) {
-        // Clear previous mapping
-        assesseeMapping.clear();
-        
-        // Create mapping of assessee number (field_61) to assessee ID
-        response.items.forEach(item => {
-          if (item.field_61 && item.id) {
-            assesseeMapping.set(item.field_61.toString(), item.id);
-            // console.log(`Mapped assessee ${item.field_61} to ID: ${item.id}`);
-          }
-        });
-        
-        console.log(`Total assessees mapped: ${assesseeMapping.size}`);
-        console.log("Assessee mapping:", Object.fromEntries(assesseeMapping));
+// Function to click the "Align right" button and set RTL direction
+function handleModalOpen() {
+  // Find and click the "Align right" button
+  const alignRightButton = document.querySelector('[aria-label="Align right"]');
+  if (alignRightButton) {
+    alignRightButton.click();
+  }
+  
+  // Wait for the tinymce element to appear inside the iframe
+  const checkForTinyMCE = setInterval(() => {
+    const iframe = document.querySelector('.mce-edit-area iframe');
+    if (iframe && iframe.contentDocument) {
+      const textBox = iframe.contentDocument.getElementById('tinymce');
+      if (textBox) {
+        console.log("yes textbox");
+        textBox.style.direction = 'rtl';
+        clearInterval(checkForTinyMCE); // Stop checking once found
       }
-    } catch (e) {
-      console.log("Not a relevant response:", e);
     }
-  });
-  originalOpen.apply(this, arguments);
-};
+  }, 50); // Check every 50ms
+  
+  // Safety timeout to stop checking after 3 seconds
+  setTimeout(() => {
+    clearInterval(checkForTinyMCE);
+  }, 3000);
+}
 
-XMLHttpRequest.prototype.send = function () {
-  console.log("Request being sent:", arguments[0]);
-  originalSend.apply(this, arguments);
-};
+// Create a MutationObserver to watch for the modal appearance
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    mutation.addedNodes.forEach((node) => {
+      // Check if the added node is the popover or contains it
+      if (node.nodeType === 1) { // Element node
+        if (node.classList && node.classList.contains('popover')) {
+          // Small delay to ensure the editor is fully loaded
+          setTimeout(handleModalOpen, 100);
+        } else if (node.querySelector && node.querySelector('.popover')) {
+          setTimeout(handleModalOpen, 100);
+        }
+      }
+    });
+  });
+});
+
+// Start observing the document body for changes
+observer.observe(document.body, {
+  childList: true,
+  subtree: true
+});
+
+// Also check if modal is already present when script loads
+if (document.querySelector('.popover')) {
+  setTimeout(handleModalOpen, 100);
+}
+
+// Global variable to store the assessee mapping
+var assesseeMapping = new Map();
+
+// Only install the interceptor once
+if (!window.xhrInterceptorInstalled) {
+    window.xhrInterceptorInstalled = true;
+    
+    var originalOpen = XMLHttpRequest.prototype.open;
+    var originalSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function () {
+        this.addEventListener("load", function () {
+            try {
+                // Only try to parse if it looks like JSON
+                if (this.responseText && this.responseText.trim().startsWith('{')) {
+                    const response = JSON.parse(this.responseText);
+                    console.log("Tadabase response:", response);
+                    
+                    // Check if this is the assessee data response
+                    if (response.items && Array.isArray(response.items)) {
+                        // Clear previous mapping
+                        assesseeMapping.clear();
+                        
+                        // Create mapping of assessee number (field_61) to assessee ID
+                        response.items.forEach(item => {
+                            if (item.field_61 && item.id) {
+                                assesseeMapping.set(item.field_61.toString(), item.id);
+                            }
+                        });
+                        
+                        console.log(`Total assessees mapped: ${assesseeMapping.size}`);
+                        console.log("Assessee mapping:", Object.fromEntries(assesseeMapping));
+                    }
+                }
+            } catch (e) {
+                // Silently ignore non-JSON responses
+            }
+        });
+        originalOpen.apply(this, arguments);
+    };
+
+    XMLHttpRequest.prototype.send = function () {
+        console.log("Request being sent:", arguments[0]);
+        originalSend.apply(this, arguments);
+    };
+}
 
 // Helper function to get assessee number from a table row
 function getAssesseeNumberFromRow(row) {
@@ -232,9 +293,9 @@ function addCommentsColumn() {
 }
 
 // Global variables to track recording state
-let currentMediaRecorder = null;
-let currentStream = null;
-let currentButton = null;
+var currentMediaRecorder = null;
+var currentStream = null;
+var currentButton = null;
 
 // Function to start audio recording
 async function startRecording(button) {
@@ -288,10 +349,10 @@ async function startRecording(button) {
             // Set a 10-second timeout to automatically stop recording
             const timeoutId = setTimeout(() => {
                 if (mediaRecorder.state === 'recording') {
-                    console.log('10-second timeout reached, stopping recording automatically');
+                    console.log('20-second timeout reached, stopping recording automatically');
                     mediaRecorder.stop();
                 }
-            }, 10000); // 10 seconds
+            }, 20000); // 10 seconds
             
             // Store the timeout ID so we can clear it if user stops manually
             mediaRecorder.timeoutId = timeoutId;
