@@ -1,222 +1,3 @@
-/* Toast styling */
-.toast-content{
-    direction: rtl;
-}
-
-/* Main container styling */
-.activities-container {
-    max-width: 100%;
-    margin: 0 auto;
-    padding: 20px;
-    direction: rtl;
-}
-
-.page-title {
-    text-align: center;
-    color: #333;
-    margin-bottom: 30px;
-    font-size: 24px;
-    font-weight: bold;
-}
-
-/* Activities list styling */
-.activities-list {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-/* Activity section styling */
-.activity-section {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    overflow: hidden;
-    border: 1px solid #e0e0e0;
-}
-
-.activity-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    user-select: none;
-}
-
-.activity-header:hover {
-    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-}
-
-.activity-title {
-    font-size: 18px;
-    font-weight: 600;
-    flex: 1;
-}
-
-.activity-count {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 14px;
-    margin-left: 15px;
-}
-
-.toggle-icon {
-    font-size: 16px;
-    transition: transform 0.3s ease;
-    margin-right: 10px;
-}
-
-.activity-header:hover .toggle-icon {
-    transform: scale(1.1);
-}
-
-/* Activity content styling */
-.activity-content {
-    padding: 20px;
-    background: #f8f9fa;
-    border-top: 1px solid #e0e0e0;
-}
-
-.numbers-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-    gap: 12px;
-    padding: 10px 0;
-}
-
-/* Number card styling */
-.number-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 50%;
-    width: 60px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    user-select: none;
-    margin: 0 auto;
-}
-
-.number-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-}
-
-.number-card:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
-}
-
-/* Loading spinner styling */
-#loading-spinner {
-    text-align: center;
-    padding: 40px 20px;
-    direction: rtl;
-}
-
-/* Error and no data message styling */
-#error-message,
-#no-data-message {
-    text-align: center;
-    padding: 40px 20px;
-    color: #666;
-    direction: rtl;
-}
-
-#error-message {
-    color: #d32f2f;
-}
-
-#error-message i,
-#no-data-message i {
-    font-size: 48px;
-    margin-bottom: 15px;
-    display: block;
-}
-
-/* Mobile responsiveness */
-@media (max-width: 768px) {
-    .activities-container {
-        padding: 15px;
-    }
-    
-    .page-title {
-        font-size: 20px;
-        margin-bottom: 20px;
-    }
-    
-    .activity-header {
-        padding: 15px;
-    }
-    
-    .activity-title {
-        font-size: 16px;
-    }
-    
-    .activity-count {
-        font-size: 12px;
-        padding: 3px 10px;
-    }
-    
-    .activity-content {
-        padding: 15px;
-    }
-    
-    .numbers-grid {
-        grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
-        gap: 10px;
-    }
-    
-    .number-card {
-        width: 50px;
-        height: 50px;
-        font-size: 16px;
-    }
-    
-    .success-toast {
-        bottom: 15px;
-        left: 20px;
-        right: 20px;
-        transform: translateY(20px);
-        max-width: none;
-    }
-}
-
-@media (max-width: 480px) {
-    .numbers-grid {
-        grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
-        gap: 8px;
-    }
-    
-    .number-card {
-        width: 45px;
-        height: 45px;
-        font-size: 14px;
-    }
-    
-    .activity-header {
-        padding: 12px;
-    }
-    
-    .activity-content {
-        padding: 12px;
-    }
-}
-
-
-
 div[ui-view] .game-button{
     text-align: center !important;
   }
@@ -379,7 +160,7 @@ div[ui-view] .game-button{
   
   /* Game Layout */
   .game-layout {
-    justify-content: center;
+    justify-content: flex-start;
   display: flex;
   width: 100%;
   margin: 0 auto;
@@ -388,6 +169,8 @@ div[ui-view] .game-button{
   overflow: visible;
   padding-top: 20px; /* Space for fixed reset button */
   align-items: stretch; /* Make all children the same height */
+  flex-direction: column; /* Stack sections: bucket on top, order below */
+  gap: 12px;
   }
   
   /* Button Container */
@@ -468,19 +251,17 @@ div[ui-view] .game-button{
   
   /* Bucket Section */
   .bucket-section {
-  flex: 0 0 50%;
-  margin-right: 10px;
+  width: 100%;
+  margin: 0;
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 5px;
-  max-height: 100vh;
+  max-height: 45vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
+  align-self: stretch;
   }
   
   .bucket-title {
@@ -526,14 +307,18 @@ div[ui-view] .game-button{
   
   /* Order Section */
   .order-section {
-  flex: 0 0 50%;
+  width: 100%;
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 5px;
   transition: width 0.3s ease, margin 0.3s ease;
   overflow: visible;
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* Brackets in a row */
+  gap: 10px;
+  justify-content: space-between;
+  align-items: stretch;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
   }
   
   /* When bucket is hidden, this class will be added programmatically */
@@ -610,6 +395,8 @@ div[ui-view] .game-button{
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     transform: scale(1.03);
     transition: none;
+    pointer-events: none;
+    z-index: 9999;
   }
   
   .block-wrapper.dragging {
@@ -729,15 +516,23 @@ div[ui-view] .game-button{
   
   .bracket {
   border: 1px solid black;
-  margin: 10px;
+  margin: 0;
   padding: 10px;
   width: auto;
-  min-width: 300px;
+  min-width: 280px;
   min-height: 87.4px;
   display: flex;
   flex-direction: column;
   align-items: center;
   overflow: visible; /* Prevent overflow on brackets */
+  transition: transform 0.2s ease-out, background-color 0.3s ease,
+  border-color 0.3s ease;
+  flex: 1 1 0;
+  }
+  .bracket.bracket-full {
+  border-width: 3px;
+  border-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15) inset;
   }
   
   .bracket-title {
@@ -753,11 +548,12 @@ div[ui-view] .game-button{
   /* Mobile Responsiveness */
   @media (max-width: 768px) {
   .game-layout {
-      justify-content: center;
-    flex-direction: row; /* Keep side-by-side even on mobile */
+      justify-content: flex-start;
+    flex-direction: column; /* Stack vertically on mobile too */
     padding: 3px;
     margin-top: 20px; /* Space for the reset button */
     padding-top: 10px;
+    gap: 8px;
   }
   
   body,
@@ -785,16 +581,18 @@ div[ui-view] .game-button{
   }
   
   .bucket-section {
-    flex: 0 0 45%;
-    margin-right: 5px;
-    overflow-y: visible;
+    width: 100%;
+    margin: 0;
+    overflow-y: auto;
     padding: 5px;
     justify-content: flex-start;
   }
   
   .order-section {
-    flex: 0 0 52%; /* Narrower order section */
+    width: 100%;
     padding: 5px;
+    flex-direction: row;
+    gap: 8px;
   }
   
   .bucket-title {
@@ -850,14 +648,15 @@ div[ui-view] .game-button{
   /* Additional fixes for smaller screens */
   @media (max-width: 480px) {
   .game-layout {
-      justify-content: center;
-    flex-direction: row; /* Keep side-by-side layout */
+      justify-content: flex-start;
+    flex-direction: column; /* Stack vertically */
+    gap: 8px;
   }
   
   .bucket-section {
-    flex: 0 0 35%;
-    margin-right: 5px;
-    overflow-y: visible; /* Prevent scrolling */
+    width: 100%;
+    margin: 0;
+    overflow-y: auto; /* Allow scrolling in bucket */
   }
   
   .bucket-items {
@@ -874,7 +673,9 @@ div[ui-view] .game-button{
   }
   
   .order-section {
-    flex: 0 0 60%;
+    width: 100%;
+    flex-direction: row;
+    gap: 6px;
   }
   
   .order-section-centered {
@@ -910,9 +711,10 @@ div[ui-view] .game-button{
   }
   
   .game-layout {
-      justify-content: center;
+      justify-content: flex-start;
     min-height: auto; /* Don't use vh units */
-    flex-direction: row; /* Ensure side-by-side layout */
+    flex-direction: column; /* Stack vertically */
+    gap: 8px;
     padding-bottom: 40px; /* Add space at bottom to allow scrolling */
   }
   
@@ -1004,174 +806,188 @@ div[ui-view] .game-button{
   }
   
   .activity-number-banner {
-  font-size: 18px;
-  font-weight: bold;
-  text-align: center;
-  margin: 10px 0;
-  color: #333;
-}
-
-.undo-button {
-  display: block;
-  margin: 8px auto 12px auto;
-  padding: 8px 14px;
-  background-color: #873a0f;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.undo-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+    margin: 10px 0;
+    color: #333;
+  }
+  
+  .instructions {
+    background-color: #f5f5f5;
+    color: #666;
+    text-align: center;
+    padding: 12px 20px;
+    margin: 15px auto;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1.5rem;
+    max-width: 600px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    font-weight: bold;
+    direction: rtl;
+  }
+  .undo-button {
+    display: block;
+    margin: 8px auto 12px auto;
+    padding: 8px 14px;
+    background-color: #873a0f;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .undo-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
   
   
   
   /* Sacks Activity Styles */
-.sacks-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-    max-width: 1200px;
-    margin: 0 auto;
-    /* Prevent double-tap zoom on mobile */
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-.assessees-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    width: 100%;
-    max-width: 1000px;
-    justify-content: center;
-}
-
-.assessee-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 2px;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    transition: transform 0.1s;
-    position: relative;
-    /* Prevent double-tap zoom on mobile */
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-}
-
-.assessee-card:hover {
-    transform: translateY(-1px);
-}
-
-.assessee-ball {
-    width: 52px;
-    height: 52px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 17px;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-.long-press-minus {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    border: none;
-    background: #f44336;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 14px;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.4);
-    transition: transform 0.1s;
-    position: absolute;
-}
-
-.long-press-minus:hover {
-    transform: scale(1.1);
-}
-
-.long-press-minus:active {
-    transform: scale(0.95);
-}
-
-.assessee-ball:active {
-    transform: scale(0.98);
-}
-
-.lap-counter {
-    font-size: 12px;
-    font-weight: bold;
-    color: #333;
-    min-width: 20px;
-    text-align: center;
-    padding: 1px 4px;
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    /* Prevent double-tap zoom and text selection */
-    touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-}
-
-/* Responsive design for sacks activity */
-@media (max-width: 768px) {
-    .assessees-grid {
-        gap: 6px;
-    }
-    .assessee-ball {
-        width: 48px;
-        height: 48px;
-        font-size: 15px;
-    }
-    .lap-counter {
-        font-size: 11px;
-        min-width: 18px;
-        padding: 1px 3px;
-    }
-}
-
-@media (max-width: 480px) {
-    .assessees-grid {
-        gap: 4px;
-    }
-    .assessee-ball {
-        width: 44px;
-        height: 44px;
-        font-size: 14px;
-    }
-    .lap-counter {
-        font-size: 10px;
-        min-width: 16px;
-        padding: 1px 2px;
-    }
-}
+  .sacks-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+      /* Prevent double-tap zoom on mobile */
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+  }
+  
+  .assessees-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+      gap: 12px 10px;
+      width: 100%;
+      max-width: 1000px;
+  }
+  
+  .assessee-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      background-color: transparent;
+      border: none;
+      box-shadow: none;
+      transition: transform 0.1s;
+      /* Prevent double-tap zoom on mobile */
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+  }
+  .ball-row {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      /* gap: 6px; */
+      white-space: nowrap;
+  }
+  
+  .assessee-card:hover {
+      transform: translateY(-1px);
+  }
+  
+  .assessee-ball {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 18px;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+  }
+  .mini-minus-button {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: none;
+      background: #f44336;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+      cursor: pointer;
+  }
+  .mini-minus-button:active { transform: scale(0.98); }
+  .assessee-ball:active {
+      transform: scale(0.98);
+  }
+  
+  /* counter-container not used in new UI */
+  
+  /* counter buttons removed in new UI */
+  
+  /* removed */
+  
+  .lap-counter {
+      font-size: 14px;
+      font-weight: bold;
+      color: #333;
+      min-width: 24px;
+      text-align: center;
+      padding: 2px 6px;
+      background-color: #fff;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+      /* Prevent double-tap zoom and text selection */
+      touch-action: manipulation;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+  }
+  
+  /* Responsive design for sacks activity */
+  @media (max-width: 768px) {
+      .assessees-grid {
+          grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
+          gap: 10px 8px;
+      }
+      .assessee-ball {
+          width: 52px;
+          height: 52px;
+          font-size: 16px;
+      }
+      .mini-minus-button { width: 22px; height: 22px; }
+      .lap-counter {
+          font-size: 14px;
+          min-width: 24px;
+      }
+  }
+  
+  @media (max-width: 480px) {
+      .assessees-grid {
+          grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+          gap: 8px 6px;
+      }
+      .assessee-ball {
+          width: 48px;
+          height: 48px;
+          font-size: 16px;
+      }
+      .mini-minus-button { width: 20px; height: 20px; }
+      .lap-counter {
+          font-size: 13px;
+          min-width: 22px;
+      }
+  }
   
   /* Success Toast Styles */
   .success-toast {
@@ -1456,131 +1272,6 @@ div[ui-view] .game-button{
       }
   }
   
-.dragging-target {
-  transform: scale(1.02);
-}
-
-/* Stretcher-specific layout (isolated from other activities) */
-.stretcher-game-layout {
-  justify-content: flex-start;
-  display: flex;
-  width: 100%;
-  margin: 0 auto;
-  padding: 5px;
-  direction: rtl;
-  overflow: visible;
-  padding-top: 20px;
-  align-items: stretch;
-  flex-direction: column; /* Bucket on top, order below */
-  gap: 12px;
-}
-
-.stretcher-bucket-section {
-  width: 100%;
-  margin: 0;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  max-height: 45vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-self: stretch;
-}
-
-.stretcher-order-section {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
-  transition: width 0.3s ease, margin 0.3s ease;
-  overflow: visible;
-  display: flex;
-  flex-direction: row; /* Brackets in a row */
-  gap: 10px;
-  justify-content: space-between;
-  align-items: stretch;
-  flex-wrap: wrap; /* Allow wrapping on smaller screens */
-}
-
-.stretcher-bracket {
-  border: 1px solid black;
-  margin: 0;
-  padding: 10px;
-  width: auto;
-  min-width: 280px;
-  min-height: 87.4px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow: visible;
-  transition: transform 0.2s ease-out, background-color 0.3s ease, border-color 0.3s ease;
-  flex: 1 1 0;
-}
-
-.stretcher-bracket.bracket-full {
-  border-width: 3px;
-  border-color: #4CAF50;
-  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15) inset;
-}
-
-.stretcher-bracket-title {
-  font-weight: bold;
-  margin-bottom: 10px;
-  text-align: right;
-  width: 100%;
-  padding: 5px;
-  background-color: #f0f0f0;
-  border-radius: 3px;
-}
-
-/* Mobile responsiveness for stretcher */
-@media (max-width: 768px) {
-  .stretcher-game-layout {
-    justify-content: flex-start;
-    flex-direction: column;
-    padding: 3px;
-    margin-top: 20px;
-    padding-top: 10px;
-    gap: 8px;
+  .dragging-target {
+    transform: scale(1.02);
   }
-  .stretcher-bucket-section {
-    width: 100%;
-    margin: 0;
-    overflow-y: auto;
-    padding: 5px;
-    justify-content: flex-start;
-  }
-  .stretcher-order-section {
-    width: 100%;
-    padding: 5px;
-    flex-direction: row;
-    gap: 8px;
-  }
-  .stretcher-bracket {
-    padding: 5px;
-    margin: 5px;
-    width: auto;
-    min-width: 0;
-    min-height: 60px;
-  }
-  .stretcher-bracket-title {
-    font-size: 12px;
-    padding: 3px;
-  }
-}
-
-@media (max-width: 480px) {
-  .stretcher-order-section {
-    width: 100%;
-    flex-direction: row;
-    gap: 6px;
-  }
-  .stretcher-bracket {
-    min-width: 0;
-    max-width: 100%;
-    box-sizing: border-box;
-    width: 100%;
-  }
-}

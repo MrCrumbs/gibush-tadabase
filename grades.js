@@ -100,12 +100,12 @@ function createTable(gradesData){
     const tableData = Object.entries(teamData).map(([assesseeNumber, activities]) => {
         const row = { 
             assesseeNumber,
-            sprints: activities.sprints || '-',
-            crawls: activities.crawls || '-',
-            sociometric_stretcher: activities.sociometric_stretcher || '-',
-            sacks: activities.sacks || '-',
-            holes: activities.holes || '-',
-            final_grade: activities.final_grade || '-'
+            sprints: activities.sprints ?? '-',
+            crawls: activities.crawls ?? '-',
+            sociometric_stretcher: activities.sociometric_stretcher ?? '-',
+            sacks: activities.sacks ?? '-',
+            holes: activities.holes ?? '-',
+            final_grade: activities.final_grade ?? '-'
         };
         return row;
     });

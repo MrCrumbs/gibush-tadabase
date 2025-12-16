@@ -1,0 +1,759 @@
+.tb-field-type-_special_{
+    direction: rtl;
+}
+
+.form-control {
+    text-align: right;
+}
+
+.ctrl-col{
+    direction: rtl;
+}
+
+.tb-form-loader {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-content: center;
+    place-items: center;
+}
+.tb-form-loader img{
+    z-index: 999;
+}
+.tb-form-loader p{
+    font-size: 2rem;
+}
+.number {
+    font-size: 18px;
+    width: 20px;
+    text-align: center;
+    padding-left: 15px;
+}
+
+
+.align-right{
+    text-align: right;
+    direction: rtl;
+}
+
+.bottom-pad{
+    padding-bottom: 10px;
+}
+
+/* START OF PLUGIN CODE FOR Form Submission Loading Spinner */
+.tb-form-loader {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    place-content: center;
+    place-items: center;
+}
+.tb-form-loader img{
+    z-index: 999;
+}
+.tb-form-loader p{
+    font-size: 2rem;
+}
+/* END OF PLUGIN CODE FOR Form Submission Loading Spinner */
+
+.x-col-ele.x-type-image.t-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%; /* Set the desired height */
+  width: 100%;  /* Set the desired width */
+}
+
+.x-col-ele.x-type-image.t-image img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+
+/* Game Layout */
+.game-layout {
+    justify-content: center;
+  display: flex;
+  width: 100%;
+  margin: 0 auto;
+  padding: 5px;
+  direction: rtl;
+  overflow: visible;
+  padding-top: 50px; /* Space for fixed reset button */
+  align-items: stretch; /* Make all children the same height */
+}
+
+/* Reset Button */
+.reset-button {
+  display: block;
+  margin: 0 0 10px 0;
+  padding: 10px 16px;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  width: 100%;
+  text-align: center;
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  z-index: 10;
+}
+
+.reset-button:hover {
+  background-color: #d32f2f;
+}
+
+/* Bucket Section */
+.bucket-section {
+  flex: 0 0 45%;
+  margin-right: 10px;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  max-height: 100vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
+}
+
+.bucket-title {
+  text-align: center;
+  font-weight: bold;
+  padding: 10px;
+  background-color: #f5f5f5;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+
+.bucket-items {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 15px 0px;
+  direction: ltr;
+  flex: none;
+  align-content: flex-start;
+}
+
+.bucket-block {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  background-color: #265728;
+  color: white;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 22px;
+  transition: transform 0.2s, background-color 0.2s;
+  margin-right: 4px;
+}
+
+.bucket-block:hover {
+  transform: scale(1.05);
+  background-color: #3e8e41;
+}
+
+/* Order Section */
+.order-section {
+  flex: 0 0 50%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  transition: width 0.3s ease, margin 0.3s ease;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+}
+
+/* When bucket is hidden, this class will be added programmatically */
+.order-section-centered {
+  margin: 0 auto !important;
+  float: none !important;
+  display: block !important;
+  max-width: 800px;
+}
+
+.container {
+  width: 300px;
+  direction: rtl;
+}
+
+.block {
+  width: 100%;
+  height: 50px;
+  margin: 5px 5px;
+  background-color: #265728;
+  color: white;
+  display: flex;
+  font-size: 20px;
+  font-weight: bold;
+  justify-content: center;
+  align-items: center;
+  cursor: move;
+  border-radius: 4px;
+  user-select: none;
+  padding: 0 10px;
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+  position: relative;
+
+  touch-action: none;
+  transition: transform 0.2s ease, background-color 0.2s ease, top 0.3s ease;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+}
+
+.block.over {
+  transform: scale(1.1);
+  background-color: #3e8e41;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.block.dragging {
+  opacity: 0.8;
+  transform: scale(0.95);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  position: relative;
+  z-index: 1000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.block-wrapper {
+  display: flex;
+  align-items: center;
+  position: relative;
+  touch-action: none;
+  width: 100%;
+  max-width: 200px;
+  margin-bottom: 6px;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+.block-clone-preview {
+  background-color: rgba(38, 87, 40, 0.95);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transform: scale(1.03);
+  transition: none;
+}
+.block-wrapper.dragging {
+  opacity: 0;
+}
+
+.ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 1;
+}
+
+.submit-container {
+width: 100%;
+display: flex;
+justify-content: end;
+}
+
+.block-wrapper.replace-target {
+transform: scale(1.05);
+transition: transform 0.2s ease-out;
+}
+
+body.no-touch-actions {
+  touch-action: none;
+}
+.remove-button {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  background-color: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: bold;
+  z-index: 1000;
+  transition: background-color 0.2s;
+}
+
+.remove-button:hover {
+  background-color: #cc0000;
+}
+
+.number {
+  font-size: 14px;
+  width: auto;
+  text-align: left;
+  padding-left: 0px;
+  flex: 1;
+}
+
+.over {
+  border: 2px dashed #ccc;
+}
+
+.placeholder-block {
+  opacity: 0.4;
+}
+
+.align-right {
+  text-align: right;
+  direction: rtl;
+}
+
+.bottom-pad {
+  padding-bottom: 10px;
+}
+
+/* START OF PLUGIN CODE FOR Form Submission Loading Spinner */
+.tb-form-loader {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-content: center;
+  place-items: center;
+}
+.tb-form-loader img {
+  z-index: 999;
+}
+.tb-form-loader p {
+  font-size: 2rem;
+}
+/* END OF PLUGIN CODE FOR Form Submission Loading Spinner */
+
+.x-col-ele.x-type-image.t-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%; /* Set the desired height */
+  width: 100%; /* Set the desired width */
+}
+
+.x-col-ele.x-type-image.t-image img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.bracket {
+  border: 1px solid black;
+  margin: 10px;
+  padding: 10px;
+  width: auto;
+  min-width: 300px;
+  min-height: 87.4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: visible; /* Prevent overflow on brackets */
+  transition: transform 0.2s ease-out, background-color 0.3s ease,
+  border-color 0.3s ease;
+}
+
+.bracket-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-align: right; /* Align title to the right */
+  width: 100%;
+  padding: 5px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .game-layout {
+      justify-content: center;
+    flex-direction: row; /* Keep side-by-side even on mobile */
+    padding: 3px;
+    margin-top: 50px; /* Space for the reset button */
+    padding-top: 10px;
+  }
+
+  body,
+  html {
+    overflow-x: hidden; /* Prevent horizontal scrolling */
+  }
+
+  .reset-button {
+    width: 100%;
+    font-size: 14px;
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
+    z-index: 10;
+    margin-bottom: 8px;
+  }
+
+  .bucket-section {
+    flex: 0 0 45%;
+    margin-right: 5px;
+    overflow-y: visible;
+    padding: 5px;
+    justify-content: flex-start;
+  }
+
+  .order-section {
+    flex: 0 0 52%; /* Narrower order section */
+    padding: 5px;
+  }
+
+  .bucket-title {
+    padding: 5px;
+    font-size: 14px;
+  }
+
+  .bucket-items {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-start;
+    align-content: flex-start;
+    gap: 10px 0px;
+    direction: ltr;
+    flex: none;
+  }
+
+  .bucket-block {
+    width: 45px; /* Smaller to fit 3 in a row */
+    height: 45px;
+    font-size: 16px;
+    margin: 2px;
+  }
+
+  .bracket {
+    padding: 5px;
+    margin: 5px;
+    width: auto;
+    min-width: 0;
+    min-height: 60px;
+  }
+
+  .block {
+    margin: 3px;
+    padding: 5px 8px;
+    font-size: 16px;
+    height: 40px;
+  }
+
+  .bracket-title {
+    font-size: 14px;
+    padding: 3px;
+  }
+
+  .block-wrapper {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* Additional fixes for smaller screens */
+@media (max-width: 480px) {
+  .game-layout {
+      justify-content: center;
+    flex-direction: row; /* Keep side-by-side layout */
+  }
+
+  .bucket-section {
+    flex: 0 0 35%;
+    margin-right: 5px;
+    overflow-y: visible; /* Prevent scrolling */
+  }
+
+  .bucket-items {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .bucket-block {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+    margin: 2px;
+  }
+
+  .order-section {
+    flex: 0 0 60%;
+  }
+
+  .order-section-centered {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .bracket {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    width: 100%;
+  }
+
+  .block-wrapper {
+    max-width: 100%;
+    width: 100%;
+  }
+}
+
+/* iPhone-specific fixes */
+@media only screen and (max-device-width: 428px) {
+  /* Fix for iOS scrolling issues */
+  html,
+  body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    position: fixed;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling for iOS */
+  }
+
+  .game-layout {
+      justify-content: center;
+    min-height: auto; /* Don't use vh units */
+    flex-direction: row; /* Ensure side-by-side layout */
+    padding-bottom: 80px; /* Add space at bottom to allow scrolling */
+  }
+
+  .reset-button {
+    width: 100%;
+    font-size: 13px;
+    position: static;
+    top: auto;
+    left: auto;
+    right: auto;
+    z-index: 10;
+    margin-bottom: 6px;
+  }
+
+  .bucket-section {
+    flex: 0 0 48%;
+    justify-content: flex-start;
+  }
+
+  .order-section {
+    flex: 0 0 49%;
+  }
+
+  .bucket-items {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 5px 0px;
+    align-items: flex-start;
+    align-content: flex-start;
+    justify-content: flex-start;
+    flex: none;
+  }
+
+  .bucket-block {
+    width: 28vw; /* Use viewport width to ensure 3 blocks per row */
+    max-width: 40px;
+    height: 40px;
+    font-size: 14px;
+    margin: 1px;
+  }
+
+  .bracket {
+    width: 100%;
+    margin: 5px 0;
+    overflow: visible;
+  }
+
+  .block {
+    font-size: 14px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  .bucket-block {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+    margin: 2px;
+  }
+
+  .bucket-section {
+    flex: 0 0 30%;
+  }
+
+  .order-section {
+    flex: 0 0 65%;
+  }
+}
+
+
+.submit-button {
+  display: block;
+  padding: 10px 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  width: 100%;
+  text-align: center;
+}
+
+.dragging-target {
+transform: scale(1.1);
+}
+
+/* Stretcher-specific layout (isolated from other activities) */
+.stretcher-game-layout {
+  justify-content: flex-start;
+  display: flex;
+  width: 100%;
+  margin: 0 auto;
+  padding: 5px;
+  direction: rtl;
+  overflow: visible;
+  padding-top: 50px; /* Keep original padding for reset button */
+  align-items: stretch;
+  flex-direction: column; /* Bucket on top, order below */
+  gap: 12px;
+}
+
+.stretcher-bucket-section {
+  width: 100%;
+  margin: 0;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  max-height: 45vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-self: stretch;
+}
+
+.stretcher-order-section {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  transition: width 0.3s ease, margin 0.3s ease;
+  overflow: visible;
+  display: flex;
+  flex-direction: row; /* Brackets in a row */
+  gap: 6px;
+  justify-content: space-between;
+  align-items: stretch;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+.stretcher-bracket {
+  border: 1px solid black;
+  margin: 0;
+  padding: 8px;
+  width: auto;
+  min-width: 200px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: visible;
+  transition: transform 0.2s ease-out, background-color 0.3s ease, border-color 0.3s ease;
+  flex: 1 1 0;
+}
+
+.stretcher-bracket.bracket-full {
+  border-width: 3px;
+  border-color: #4CAF50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.15) inset;
+}
+
+.stretcher-bracket-title {
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-align: center;
+  width: 100%;
+  padding: 5px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
+}
+
+/* Mobile responsiveness for stretcher */
+@media (max-width: 768px) {
+  .stretcher-game-layout {
+    justify-content: flex-start;
+    flex-direction: column;
+    padding: 3px;
+    margin-top: 50px; /* Keep original margin for reset button */
+    padding-top: 10px;
+    gap: 8px;
+  }
+  .stretcher-bucket-section {
+    width: 100%;
+    margin: 0;
+    overflow-y: auto;
+    padding: 5px;
+    justify-content: flex-start;
+  }
+  .stretcher-order-section {
+    width: 100%;
+    padding: 5px;
+    flex-direction: row;
+    gap: 8px;
+  }
+  .stretcher-bracket {
+    padding: 4px;
+    margin: 3px;
+    width: auto;
+    min-width: 0;
+    min-height: 50px;
+  }
+  .stretcher-bracket-title {
+    font-size: 11px;
+    padding: 2px;
+  }
+}
+
+@media (max-width: 480px) {
+  .stretcher-order-section {
+    width: 100%;
+    flex-direction: row;
+    gap: 6px;
+  }
+  .stretcher-bracket {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    width: 100%;
+  }
+}

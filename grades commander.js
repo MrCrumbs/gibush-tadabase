@@ -107,12 +107,12 @@ function createTable(gradesData){
             const row = { 
                 teamNumber,
                 assesseeNumber,
-                sprints: activities.sprints || '-',
-                crawls: activities.crawls || '-',
-                sociometric_stretcher: activities.sociometric_stretcher || '-',
-                sacks: activities.sacks || '-',
-                holes: activities.holes || '-',
-                final_grade: activities.final_grade || '-'
+                sprints: activities.sprints ?? '-',
+                crawls: activities.crawls ?? '-',
+                sociometric_stretcher: activities.sociometric_stretcher ?? '-',
+                sacks: activities.sacks ?? '-',
+                holes: activities.holes ?? '-',
+                final_grade: activities.final_grade ?? '-'
             };
             tableData.push(row);
         });

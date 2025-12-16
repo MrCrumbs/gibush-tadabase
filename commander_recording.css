@@ -1,0 +1,95 @@
+.rtl-direction{
+direction: rtl;
+}
+.number{
+    direction: ltr !important;
+}
+.nav-tabs>li{
+    float: right !important;
+}
+.nav-tabs>li>a{
+    border: 1px solid #b3adad !important;
+}
+.rtl-direction{
+    direction: rtl;
+}
+
+/* Comments column styling */
+.comments-column-header {
+    text-align: center !important;
+    /* padding: 8px; */
+    /* border: 1px solid #dee2e6; */
+    /* background-color: #f8f9fa; */
+    /* font-weight: bold; */
+}
+
+.comments-column-cell {
+    text-align: center !important;
+    /* padding: 8px; */
+    /* border: 1px solid #dee2e6; */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Record button styling */
+.record-button {
+    background: linear-gradient(135deg, #ff4757, #ff3742);
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* min-width: 40px; */
+    /* height: 40px; */
+    color: white;
+    box-shadow: 0 2px 4px rgba(255, 71, 87, 0.3);
+}
+
+.record-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
+    background: linear-gradient(135deg, #ff3742, #ff2f3a);
+}
+
+.record-button:active {
+    transform: scale(0.95);
+}
+
+.record-button i {
+    font-size: 14px;
+}
+
+/* Recording state styling */
+.record-button.recording {
+    background: linear-gradient(135deg, #ff2f3a, #ff1a1a) !important;
+    box-shadow: 0 4px 12px rgba(255, 47, 58, 0.4) !important;
+}
+
+/* Processing state styling */
+.record-button.processing {
+    background: linear-gradient(135deg, #ffa726, #ff9800) !important;
+    box-shadow: 0 4px 12px rgba(255, 167, 38, 0.4) !important;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Loading spinner */
+.record-button.processing i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Hide the last column (assessor number column) */
+table thead tr th:last-child,
+table tbody tr td:last-child {
+    display: none !important;
+}

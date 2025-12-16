@@ -1,14 +1,9 @@
-TB.render('component_3', function(data) {
+TB.render('component_10', function(data) {
     setTimeout(() => {
-        $("#hichartsJS").remove();
-        var assesseesInitialElement = document.querySelector("article div[ui-view]");
-        const existing = assesseesInitialElement.nextSibling;
-        if (existing) existing.remove();
         $('.pull-left, .form-inline').addClass('pull-right').removeClass('pull-left').css("direction", "rtl");
         $(".filter-tabs li:last a").text("נקה סינון");
         $(".t-filter-button-text").text(" הוסף מסננים");
         $(".input-group input").attr("placeholder", "חיפוש");
-        $(".t-export-button").text("ייצוא");
         
         // Add comments column to the table
         addCommentsColumn();
@@ -16,8 +11,8 @@ TB.render('component_3', function(data) {
     });
 });
 
-// Global variable to store the assessee mapping
-let assesseeMapping = new Map();
+// Global variable to store the assessor mapping
+let assessorMapping = new Map();
 
 // Store the original XHR open method
 const originalOpen = XMLHttpRequest.prototype.open;
@@ -29,21 +24,21 @@ XMLHttpRequest.prototype.open = function () {
       const response = JSON.parse(this.responseText);
       console.log("Tadabase response:", response);
       
-      // Check if this is the assessee data response
+      // Check if this is the assessor data response
       if (response.items && Array.isArray(response.items)) {
         // Clear previous mapping
-        assesseeMapping.clear();
+        assessorMapping.clear();
         
-        // Create mapping of assessee number (field_61) to assessee ID
+        // Create mapping of assessor number (field_1530) to assessor ID
         response.items.forEach(item => {
-          if (item.field_61 && item.id) {
-            assesseeMapping.set(item.field_61.toString(), item.id);
-            // console.log(`Mapped assessee ${item.field_61} to ID: ${item.id}`);
+          if (item.field_1530 && item.id) {
+            assessorMapping.set(item.field_1530.toString(), item.id);
+            // console.log(`Mapped assessor ${item.field_1530} to ID: ${item.id}`);
           }
         });
         
-        console.log(`Total assessees mapped: ${assesseeMapping.size}`);
-        console.log("Assessee mapping:", Object.fromEntries(assesseeMapping));
+        console.log(`Total assessors mapped: ${assessorMapping.size}`);
+        console.log("Assessor mapping:", Object.fromEntries(assessorMapping));
       }
     } catch (e) {
       console.log("Not a relevant response:", e);
@@ -57,33 +52,31 @@ XMLHttpRequest.prototype.send = function () {
   originalSend.apply(this, arguments);
 };
 
-// Helper function to get assessee number from a table row
-function getAssesseeNumberFromRow(row) {
-    // Get the first cell (first column) which contains the assessee number
-    const firstCell = row.querySelector('td:first-child');
-    if (firstCell) {
-        const text = firstCell.textContent.trim();
-        // Check if it's a number (assessee number)
+// Helper function to get assessor number from a table row
+function getAssessorNumberFromRow(row) {
+    // Get the last cell (last column) which contains the assessor number
+    const lastCell = row.querySelector('td:last-child');
+    if (lastCell) {
+        const text = lastCell.textContent.trim();
+        // Check if it's a number (assessor number)
         if (/^\d+$/.test(text)) {
             return parseInt(text);
         }
     }
-    
     return null;
 }
 
-// Function to update assessee record in Tadabase via backend
-async function updateAssesseeRecord(assesseeId, assesseeNumber, value) {
+// Function to update assessor record in Tadabase via backend
+async function updateAssessorRecord(assessorId, assessorNumber, value) {
     try {
         // Prepare the payload for your backend
-        const assessor_name = "{loggedInUser.Name}";
         const payload = {
-            assessee_id: assesseeId,
-            comment: assessor_name + ": " + value
+            assessor_id: assessorId,
+            comment: value
         };
         
         // Make the API call to your backend
-        const response = await fetch('https://misc-ten.vercel.app/update_assessor_comments', {
+        const response = await fetch('https://misc-ten.vercel.app/update_commander_comments', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -93,7 +86,7 @@ async function updateAssesseeRecord(assesseeId, assesseeNumber, value) {
         
         if (response.ok) {
             const result = await response.json();
-            console.log(`Successfully updated record for assessee ${assesseeNumber}:`, result);
+            console.log(`Successfully updated record for assessor ${assessorNumber}:`, result);
             
             // Refresh the table to show updated data
             const refreshButton = document.querySelector('.t-refresh-button');
@@ -102,10 +95,10 @@ async function updateAssesseeRecord(assesseeId, assesseeNumber, value) {
             }
         } else {
             const errorData = await response.json();
-            console.error(`Failed to update record for assessee ${assesseeNumber}:`, response.status, errorData.error);
+            console.error(`Failed to update record for assessor ${assessorNumber}:`, response.status, errorData.error);
         }
     } catch (error) {
-        console.error(`Error updating record for assessee ${assesseeNumber}:`, error);
+        console.error(`Error updating record for assessor ${assessorNumber}:`, error);
     }
 }
 
@@ -125,12 +118,12 @@ function addCommentsColumn() {
                 newHeaderCell.textContent = 'הערות';
                 newHeaderCell.className = 'comments-column-header';
                 
-                // Insert as third column (index 2)
-                const thirdCell = headerRow.children[2];
-                if (thirdCell) {
-                    headerRow.insertBefore(newHeaderCell, thirdCell);
+                // Insert as third column (index 2, before the 4th column)
+                const fourthCell = headerRow.children[2];
+                if (fourthCell) {
+                    headerRow.insertBefore(newHeaderCell, fourthCell);
                 } else {
-                    // If there's no third column, append to the end
+                    // If there's no fourth column, append to the end
                     headerRow.appendChild(newHeaderCell);
                 }
             }
@@ -173,12 +166,12 @@ function addCommentsColumn() {
                 }
                 
                 // Get the assessee number from this row
-                const assesseeNumber = getAssesseeNumberFromRow(row);
-                if (assesseeNumber) {
-                    // Get the assessee ID from our mapping
-                    const assesseeId = assesseeMapping.get(assesseeNumber.toString());
-                    if (assesseeId) {
-                        console.log(`Starting recording for assessee ${assesseeNumber} (ID: ${assesseeId})`);
+                const assessorNumber = getAssessorNumberFromRow(row);
+                if (assessorNumber) {
+                    // Get the assessor ID from our mapping
+                    const assessorId = assessorMapping.get(assessorNumber.toString());
+                    if (assessorId) {
+                        console.log(`Starting recording for assessor ${assessorNumber} (ID: ${assessorId})`);
                         
                         // Start recording audio
                         console.log('Starting recording...');
@@ -197,7 +190,7 @@ function addCommentsColumn() {
                                 
                                 if (transcription) {
                                     // Update the record in Tadabase with transcription
-                                    await updateAssesseeRecord(assesseeId, assesseeNumber, transcription);
+                                    await updateAssessorRecord(assessorId, assessorNumber, transcription);
                                 }
                             } finally {
                                 // Reset button to normal state
@@ -209,22 +202,22 @@ function addCommentsColumn() {
                         }
                     }
                     else {
-                        console.log(`No mapping found for assessee number: ${assesseeNumber}`);
+                        console.log(`No mapping found for assessor number: ${assessorNumber}`);
                     }
                 }
                 else {
-                    console.log('Could not find assessee number in row');
+                    console.log('Could not find assessor number in row');
                 }
             });
             
             newDataCell.appendChild(recordButton);
             
-            // Insert as third column (index 2) in the row
-            const thirdCell = row.children[2];
-            if (thirdCell) {
-                row.insertBefore(newDataCell, thirdCell);
+            // Insert as third column (index 2, before the 4th column)
+            const fourthCell = row.children[2];
+            if (fourthCell) {
+                row.insertBefore(newDataCell, fourthCell);
             } else {
-                // If there's no third column, append to the end
+                // If there's no fourth column, append to the end
                 row.appendChild(newDataCell);
             }
         });
@@ -373,6 +366,7 @@ async function transcribeRecording(audioBlob) {
     }
 }
 
+
 function showMore(id, event) {
     // Prevent the click from bubbling up to parent elements (which would open the editing modal)
     if (event) {
@@ -404,6 +398,16 @@ function getPlainTextContent(htmlString) {
     // Get text content without HTML tags
     return tempDiv.textContent || tempDiv.innerText || '';
 }
+
+function stripLeadingWhitespaceAndEmptyTags(html) {
+    // remove leading whitespace
+    html = html.replace(/^[\s\n\r]+/, '');
+  
+    // drop empty <p> or <span> wrappers at the start
+    html = html.replace(/^<(p|span)(\s[^>]*)?>\s*<\/\1>/i, '');
+  
+    return html;
+  }
 
 // Helper function to split HTML content at a specific text length
 // Returns an object with { truncated: "...", remainder: "..." }
@@ -537,13 +541,32 @@ function truncateHtmlAtTextLength(htmlString, maxTextLength) {
     
     removeTextFromBeginning(tempDiv2, actualSplitPoint);
     var remainderHtmlResult = tempDiv2.innerHTML;
+    remainderHtmlResult = stripLeadingWhitespaceAndEmptyTags(remainderHtmlResult);
+    if (truncatedPlainText.trim().endsWith('*')) {
+        remainderHtmlResult = remainderHtmlResult
+          .replace(/^[\s\n\r]+/, '')
+          .replace(/^<p>(\s*<span[^>]*>\s*<\/span>\s*)*<\/p>/i, '')
+          .replace(/^(<span[^>]*>\s*)/i, match => match.replace(/\s+$/, ' '));
+      } else {
+        remainderHtmlResult = ' ' + remainderHtmlResult;
+      }
+    
+    // Check if truncated part ends with "*" and remainder starts with whitespace/newline
+    // If so, strip leading whitespace from remainder to keep text adjacent to "*"
+    var truncatedTextEnd = getPlainTextContent(truncatedHtml).trim();
+    if (truncatedTextEnd.endsWith('*')) {
+        // Strip leading whitespace (spaces, newlines, tabs) from remainder
+        remainderHtmlResult = remainderHtmlResult.replace(/^[\s\n\r\t]+/, '');
+    } else {
+        // Add a space before remainder for normal cases
+        remainderHtmlResult = " " + remainderHtmlResult;
+    }
     
     return {
         truncated: truncatedHtml,
-        remainder: " " +remainderHtmlResult
+        remainder: remainderHtmlResult
     };
 }
-
 var trun = function(){
     if(!$('.shrinkables').length){
         var len = 40;
@@ -552,9 +575,9 @@ var trun = function(){
             for (var i = 0; i < shrinkables.length; i++) {
                 var fullText = shrinkables[i].innerHTML.replaceAll("&nbsp;", " ");
                 var plainText = getPlainTextContent(fullText);
-                console.log("fullText:", fullText);
-                console.log("plainText:", plainText);
-                console.log("plainText length:", plainText.length);
+                // console.log("fullText:", fullText);
+                // console.log("plainText:", plainText);
+                // console.log("plainText length:", plainText.length);
                 
                 // Use plain text length for comparison, but keep full HTML for display
                 if (plainText.length > len && !fullText.includes("badge")) { //&& !$(shrinkables[i].offsetParent).hasClass('allow-inline-edit')

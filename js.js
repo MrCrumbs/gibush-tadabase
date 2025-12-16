@@ -602,8 +602,32 @@ function sacks(){
     // Create instructions div
     const instructionsDiv = document.createElement("div");
     instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "הוסיפו סיבוב למוערך בכל פעם שהוא משלים הקפה.";
+    instructionsDiv.textContent = "לחיצה על הכדור מוסיפה הקפה. לחיצה ארוכה להורדת הקפות.";
     initialElement.appendChild(instructionsDiv);
+    
+    // Undo button (cancel last action)
+    const actionStack = [];
+    const undoButton = document.createElement("button");
+    undoButton.className = "undo-button";
+    undoButton.textContent = "בטל פעולה אחרונה";
+    undoButton.disabled = true;
+    const updateUndoButtonState = () => {
+        undoButton.disabled = actionStack.length === 0;
+    };
+    undoButton.addEventListener("click", () => {
+        const last = actionStack.pop();
+        if (!last) return;
+        const card = document.querySelector(`.assessee-card[data-number="${last.number}"]`);
+        const lapCounter = card?.querySelector(".lap-counter");
+        if (!lapCounter) return;
+        const current = parseInt(lapCounter.textContent) || 0;
+        // Inverse the last delta
+        const next = Math.max(0, current - last.delta);
+        lapCounter.textContent = next.toString();
+        saveSacksData();
+        updateUndoButtonState();
+    });
+    initialElement.appendChild(undoButton);
     
     // Create main container
     const sacksContainer = document.createElement("div");
@@ -618,49 +642,95 @@ function sacks(){
     // Load existing data from localStorage
     const sacksData = JSON.parse(localStorage.getItem("sacksData") || "{}");
     
-    // Create assessee cards
+    // Create assessee balls
     assesseeNumbers.forEach(assesseeNumber => {
         const assesseeCard = document.createElement("div");
         assesseeCard.className = "assessee-card";
         assesseeCard.dataset.number = assesseeNumber;
-        
-        const assesseeNumberDiv = document.createElement("div");
-        assesseeNumberDiv.className = "assessee-number";
-        assesseeNumberDiv.textContent = assesseeNumber;
-        assesseeCard.appendChild(assesseeNumberDiv);
-        
-        const counterContainer = document.createElement("div");
-        counterContainer.className = "counter-container";
-        
-        const minusButton = document.createElement("button");
-        minusButton.className = "counter-button minus-button";
-        minusButton.textContent = "-";
-        minusButton.addEventListener("click", () => {
-            const currentCount = parseInt(assesseeCard.querySelector(".lap-counter").textContent);
-            if (currentCount > 0) {
-                assesseeCard.querySelector(".lap-counter").textContent = currentCount - 1;
-                saveSacksData();
-            }
-        });
-        
+
+        const ball = document.createElement("div");
+        ball.className = "assessee-ball";
+        ball.textContent = assesseeNumber;
+
         const lapCounter = document.createElement("div");
         lapCounter.className = "lap-counter";
         lapCounter.textContent = sacksData[assesseeNumber] || "0";
-        
-        const plusButton = document.createElement("button");
-        plusButton.className = "counter-button plus-button";
-        plusButton.textContent = "+";
-        plusButton.addEventListener("click", () => {
-            const currentCount = parseInt(assesseeCard.querySelector(".lap-counter").textContent);
-            assesseeCard.querySelector(".lap-counter").textContent = currentCount + 1;
-            saveSacksData();
+
+        // Interaction: tap to increment, long-press to show minus button
+        let pressTimer = null;
+        let longPressTriggered = false;
+        let minusButton = null;
+
+        const clearPressTimer = () => {
+            if (pressTimer) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+            }
+        };
+
+        const hideMinusButton = () => {
+            if (minusButton) {
+                minusButton.remove();
+                minusButton = null;
+            }
+        };
+
+        ball.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            longPressTriggered = false;
+            hideMinusButton(); // Hide any existing minus button
+            
+            pressTimer = setTimeout(() => {
+                longPressTriggered = true;
+                
+                // Create and show minus button above the ball
+                minusButton = document.createElement("button");
+                minusButton.className = "long-press-minus";
+                minusButton.textContent = "-";
+                minusButton.style.position = "absolute";
+                
+                // Position the minus button to the left of the ball
+                const ballRect = ball.getBoundingClientRect();
+                minusButton.style.left = (ballRect.left - 30) + "px";
+                minusButton.style.top = (ballRect.top + ballRect.height/2 - 12) + "px";
+                minusButton.style.zIndex = "1000";
+                
+                // Add click event to decrement
+                minusButton.addEventListener("click", () => {
+                    const currentCount = parseInt(lapCounter.textContent) || 0;
+                    if (currentCount > 0) {
+                        lapCounter.textContent = (currentCount - 1).toString();
+                        actionStack.push({ number: assesseeNumber, delta: -1 });
+                        updateUndoButtonState();
+                        saveSacksData();
+                    }
+                    hideMinusButton();
+                });
+                
+                document.body.appendChild(minusButton);
+                
+                // Auto-hide after 3 seconds
+                setTimeout(hideMinusButton, 3000);
+            }, 500);
         });
-        
-        counterContainer.appendChild(minusButton);
-        counterContainer.appendChild(lapCounter);
-        counterContainer.appendChild(plusButton);
-        assesseeCard.appendChild(counterContainer);
-        
+
+        ball.addEventListener("pointerup", (e) => {
+            e.preventDefault();
+            if (!longPressTriggered) {
+                const currentCount = parseInt(lapCounter.textContent) || 0;
+                lapCounter.textContent = (currentCount + 1).toString();
+                actionStack.push({ number: assesseeNumber, delta: +1 });
+                updateUndoButtonState();
+                saveSacksData();
+            }
+            clearPressTimer();
+        });
+
+        ball.addEventListener("pointercancel", clearPressTimer);
+        ball.addEventListener("pointerleave", clearPressTimer);
+
+        assesseeCard.appendChild(lapCounter);
+        assesseeCard.appendChild(ball);
         assesseesGrid.appendChild(assesseeCard);
     });
     
@@ -681,6 +751,7 @@ function sacks(){
         topButtonContainer.remove();
         activityNameDisplay.remove();
         instructionsDiv.remove();
+        undoButton.remove();
 
         // Reset current game
         currentGame = null;
@@ -696,6 +767,8 @@ function sacks(){
             document.querySelectorAll(".lap-counter").forEach(counter => {
                 counter.textContent = "0";
             });
+            actionStack.length = 0;
+            updateUndoButtonState();
         }
     });
     
@@ -748,6 +821,7 @@ function sacks(){
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
                 instructionsDiv.remove();
+                undoButton.remove();
                 
                 // Display main menu
                 displayMenu();
@@ -827,7 +901,7 @@ function sociometricStretcher(activityNumber){
     initialElement.appendChild(instructionsDiv);
 
     const gameLayout = document.createElement("div");
-    gameLayout.className = "game-layout";
+    gameLayout.className = "stretcher-game-layout";
     initialElement.appendChild(gameLayout);
     
     const submitContainer = document.createElement("div");
@@ -839,7 +913,7 @@ function sociometricStretcher(activityNumber){
     initialElement.appendChild(submitContainer);
     
     const bucketSection = document.createElement("div");
-    bucketSection.className = "bucket-section";
+    bucketSection.className = "stretcher-bucket-section";
     gameLayout.appendChild(bucketSection);
     
     const bucketTitle = document.createElement("div");
@@ -861,7 +935,7 @@ function sociometricStretcher(activityNumber){
     }
     
     const orderSection = document.createElement("div");
-    orderSection.className = "order-section";
+    orderSection.className = "stretcher-order-section";
     gameLayout.appendChild(orderSection);
 
     function returnToBucket(blockWrapper) {
@@ -975,7 +1049,7 @@ function sociometricStretcher(activityNumber){
         ghostBucketItem.style.display = "none";
         const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
         ghostBucketItem.style.display = "";
-        const newTargetBracket = elementBelow?.closest(".bracket");
+        const newTargetBracket = elementBelow?.closest(".stretcher-bracket");
         // Check if the new target bracket is different from the last target bracket
         if (newTargetBracket !== lastBucketDragTargetBracket) {
             // If so, remove the dragging target class from the last target bracket
@@ -1009,7 +1083,7 @@ function sociometricStretcher(activityNumber){
             const touch = e.changedTouches[0];
             const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
             const targetBlock = elementBelow?.closest(".block-wrapper");
-            const targetBracket = elementBelow?.closest(".bracket");
+            const targetBracket = elementBelow?.closest(".stretcher-bracket");
         
             if (targetBracket) {
                 const number = draggedBucketItem.dataset.number;
@@ -1036,7 +1110,7 @@ function sociometricStretcher(activityNumber){
     };
     
     function initDrag(el) {
-        let offsetY, currentClone, originalParent, originalNextSibling, isDraggingBracket = false, startXBracket, startYBracket, lastTargetBracket = null;
+        let offsetX, offsetY, currentClone, originalParent, originalNextSibling, isDraggingBracket = false, startXBracket, startYBracket, lastTargetBracket = null;
         const getClientCoords = (e) => e.touches?.[0] || e.changedTouches?.[0] || e;
         
         const move = (e) => {
@@ -1048,6 +1122,7 @@ function sociometricStretcher(activityNumber){
                     isDraggingBracket = true;
                     const rect = el.getBoundingClientRect();
                     offsetY = clientY - rect.top;
+                    offsetX = clientX - rect.left;
                     currentClone = el.cloneNode(true);
                     currentClone.classList.add("block-clone-preview");
                     document.body.appendChild(currentClone);
@@ -1072,6 +1147,7 @@ function sociometricStretcher(activityNumber){
 
             const { clientX, clientY } = getClientCoords(e);
             currentClone.style.top = `${clientY - offsetY}px`;
+            currentClone.style.left = `${clientX - offsetX}px`;
             manageAutoScroll(clientY);
 
             currentClone.style.display = "none";
@@ -1081,7 +1157,7 @@ function sociometricStretcher(activityNumber){
             const previousTarget = document.querySelector(".replace-target");
             if (previousTarget && previousTarget !== currentTarget)
                 previousTarget.classList.remove("replace-target");
-            const newParentBracket = elementBelow?.closest(".bracket");          
+            const newParentBracket = elementBelow?.closest(".stretcher-bracket");          
             // Check if the new parent bracket is different from the last target bracket
             if (newParentBracket !== lastTargetBracket) {
                 // If so, remove the dragging target class from the last target bracket
@@ -1179,29 +1255,43 @@ function sociometricStretcher(activityNumber){
         
     function updateBucketVisibility() {
         if (document.querySelectorAll(".bucket-block").length - getTotalBlocks() <= 0) {
-            document.querySelector(".bucket-section").style.display = "none";
+            document.querySelector(".stretcher-bucket-section").style.display = "none";
         } 
         else {
-            document.querySelector(".bucket-section").style.display = "flex";
+            document.querySelector(".stretcher-bucket-section").style.display = "flex";
         }
     }
         
     function updateUI() {
         updateResultsStrings();
         updateBucketVisibility();
+        updateBracketFullness();
+    }
+
+    function updateBracketFullness() {
+        document.querySelectorAll(".stretcher-bracket").forEach((bracket) => {
+            const capacity = parseInt(bracket.dataset.maxCapacity);
+            const currentSize = bracket.querySelectorAll(".block-wrapper").length;
+            if (currentSize >= capacity) {
+                bracket.classList.add("bracket-full");
+            } 
+            else {
+                bracket.classList.remove("bracket-full");
+            }
+        });
     }
 
     const limits = (assesseeNumbers.length > 19) ? [8, 2, 4] : [4, 2, 4];
     const limitTitles = ["לקחו אלונקה", "לקחו ג'ריקן", "מקום ראשון"];
     for (let i = 0; i < limits.length; i++) {
         const bracket = document.createElement("div");
-        bracket.className = "bracket";
+        bracket.className = "stretcher-bracket";
         
         const currentLimit = limits[i];
         bracket.setAttribute("data-max-capacity", currentLimit);
         
         const bracketTitle = document.createElement("div");
-        bracketTitle.className = "bracket-title";
+        bracketTitle.className = "stretcher-bracket-title";
         bracketTitle.textContent = `${limitTitles[i]} (${limits[i]} מוערכים)`;
 
         bracket.appendChild(bracketTitle);
@@ -1289,7 +1379,7 @@ function sociometricStretcher(activityNumber){
     backButton.addEventListener("click", () => {
         // Remove all game content (button container and game layout)
         const buttonContainer = initialElement.querySelector('.top-button-container');
-        const gameLayout = initialElement.querySelector('.game-layout');
+        const gameLayout = initialElement.querySelector('.stretcher-game-layout');
         const submitContainer = initialElement.querySelector('.submit-container');
         const activityNumberBanner = initialElement.querySelector('.activity-number-banner');
         const activityNameDisplay = initialElement.querySelector('.activity-name-banner');
@@ -1337,8 +1427,8 @@ function sociometricStretcher(activityNumber){
             showLoading();
 
             // Hide sections while submitting
-            const bucketSection = document.querySelector(".bucket-section");
-            const orderSection = document.querySelector(".order-section");
+            const bucketSection = document.querySelector(".stretcher-bucket-section");
+            const orderSection = document.querySelector(".stretcher-order-section");
             if (bucketSection) bucketSection.style.display = "none";
             if (orderSection) orderSection.style.display = "none";
 
@@ -1408,8 +1498,8 @@ function sociometricStretcher(activityNumber){
             );
         });
 
-        const bucketSection = document.querySelector(".bucket-section");
-        const orderSection = document.querySelector(".order-section");
+        const bucketSection = document.querySelector(".stretcher-bucket-section");
+        const orderSection = document.querySelector(".stretcher-order-section");
         if (bucketSection) bucketSection.style.display = "flex";
         if (orderSection) orderSection.style.display = "flex";
 
