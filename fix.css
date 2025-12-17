@@ -106,6 +106,7 @@
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
     user-select: none;
     margin: 0 auto;
+    position: relative;
 }
 
 .number-card:hover {
@@ -117,6 +118,47 @@
 .number-card:active {
     transform: translateY(0);
     box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.number-card-text {
+    z-index: 1;
+}
+
+/* Delete button on number card */
+.number-card-delete {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background-color: #f44336;
+    color: white;
+    border: 2px solid white;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 10;
+}
+
+.number-card:hover .number-card-delete {
+    opacity: 1;
+}
+
+.number-card-delete:hover {
+    background-color: #d32f2f;
+    transform: scale(1.1);
+}
+
+.number-card-delete:active {
+    transform: scale(0.95);
 }
 
 /* Loading spinner styling */
@@ -185,6 +227,15 @@
         font-size: 16px;
     }
     
+    .number-card-delete {
+        width: 18px;
+        height: 18px;
+        font-size: 12px;
+        top: -4px;
+        right: -4px;
+        opacity: 1; /* Always visible on mobile for touch devices */
+    }
+    
     .success-toast {
         bottom: 15px;
         left: 20px;
@@ -204,6 +255,15 @@
         width: 45px;
         height: 45px;
         font-size: 14px;
+    }
+    
+    .number-card-delete {
+        width: 16px;
+        height: 16px;
+        font-size: 11px;
+        top: -3px;
+        right: -3px;
+        border-width: 1px;
     }
     
     .activity-header {

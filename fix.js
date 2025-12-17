@@ -214,7 +214,24 @@ function createActivitySection(activityName, activityNumbers) {
     activityNumbers.forEach(number => {
         const numberCard = document.createElement("div");
         numberCard.className = "number-card";
-        numberCard.textContent = number;
+        
+        // Create container for the number text
+        const numberText = document.createElement("span");
+        numberText.className = "number-card-text";
+        numberText.textContent = number;
+        numberCard.appendChild(numberText);
+        
+        // Create delete button
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "number-card-delete";
+        deleteBtn.innerHTML = "&times;";
+        deleteBtn.title = "מחק מקצה";
+        deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation(); // Prevent triggering the card click
+            confirmAndDeleteActivity(activityName, parseInt(number));
+        });
+        numberCard.appendChild(deleteBtn);
+        
         numberCard.addEventListener("click", () => {
             startResubmitActivity(activityName, parseInt(number));
         });
@@ -337,6 +354,88 @@ function goBackToActivitiesList() {
     
     // Reload activities list
     loadExistingActivities();
+}
+
+function confirmAndDeleteActivity(activityName, activityNumber) {
+    const hebrewName = engToHebTranslations[activityName] || activityName;
+    const confirmMessage = `האם הנך בטוח שברצונך למחוק מקצה זה?\n\n${hebrewName} - מקצה מספר ${activityNumber}`;
+    
+    if (confirm(confirmMessage)) {
+        deleteActivity(activityName, activityNumber);
+    }
+}
+
+async function deleteActivity(activityName, activityNumber) {
+    showLoading();
+    
+    try {
+        const response = await fetch("https://misc-ten.vercel.app/delete_activity", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                team_number: currentTeamNumberFixGrades,
+                activity_name: activityName,
+                activity_number: activityNumber
+            })
+        });
+
+        if (!response.ok) {
+            console.error("Failed to delete activity:", response.statusText);
+            hideLoading();
+            alert("שגיאה במחיקת המקצה. נא לנסות שנית.");
+            return;
+        }
+
+        const data = await response.json();
+        console.log("Delete activity response:", data);
+
+        if (data.success) {
+            // Show success message
+            showDeleteSuccessToast();
+            
+            // Clear the current activities container
+            const container = document.querySelector(".activities-container");
+            if (container) container.remove();
+            
+            // Reload the activities list to reflect the changes
+            await loadExistingActivities();
+        } else {
+            hideLoading();
+            alert("שגיאה במחיקת המקצה. נא לנסות שנית.");
+        }
+    } catch (error) {
+        console.error("Error deleting activity:", error);
+        hideLoading();
+        alert("שגיאה במחיקת המקצה. נא לנסות שנית.");
+    }
+}
+
+function showDeleteSuccessToast() {
+    const toast = document.createElement('div');
+    toast.className = 'success-toast';
+    toast.innerHTML = `
+        <div class="toast-content">
+            <i class="fas fa-check-circle"></i>
+            <span>המקצה נמחק בהצלחה!</span>
+        </div>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+    
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 300);
+    }, 2000);
 }
 
 function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
