@@ -13,6 +13,18 @@ TB.render('component_3', function(data) {
         // Add comments column to the table
         addCommentsColumn();
         trun();
+        
+        // Get the table-actions div (the parent container of the whole bar)
+        const tableActions = document.querySelector('.table-actions.no-print');
+        
+        // Create the label element
+        const recordsLabel = document.createElement('span');
+        recordsLabel.className = 'badge badge-secondary';
+        recordsLabel.style.cssText = 'direction: rtl; vertical-align: middle; font-size: 13px; padding: 5px 10px; float: left; margin-top: 5px;';
+        recordsLabel.textContent = `${data.records.length} מוערכים`;
+        
+        // Insert at the very beginning of the table-actions div
+        tableActions.insertBefore(recordsLabel, tableActions.firstChild);
     });
 });
 
