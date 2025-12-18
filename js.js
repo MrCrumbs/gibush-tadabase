@@ -11,7 +11,7 @@ var activityNumberMap = {};
 var numberToIdMap = {};
 var engToHeb = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-    "holes_obstacle": "חפירת בור מכשול", "holes_personal_group": "חפירת בור אישי קבוצתי", "sacks": "שקים"
+    "holes": "חפירת בור", "sacks": "שקים"
 }
 
 TB.render("component_9", async function (data) {
@@ -45,11 +45,8 @@ TB.render("component_9", async function (data) {
         case "sacks":
             sacks();
             break;
-        case "holes_obstacle":
-            holesObstacleOrPersonalGroup("holes_obstacle");
-            break;
-        case "holes_personal_group":
-            holesObstacleOrPersonalGroup("holes_personal_group");
+        case "holes":
+            holes();
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
@@ -168,11 +165,7 @@ function displayMenu(){
         btn.innerHTML = `<span class="game-icon">${game.icon}</span><span class="game-title">${game.title}</span>`;
         // Add onclick handler per game
         btn.addEventListener("click", function () {
-            if (game.translatedTitle === "holes") {
-                displayHolesSubMenu();
-            } else {
-                runGame(game.translatedTitle);
-            }
+            runGame(game.translatedTitle);
         });
         menuContainer.appendChild(btn);
     });
@@ -181,61 +174,10 @@ function displayMenu(){
     initialElement.parentNode.insertBefore(menuContainer, initialElement.nextSibling);
 }
 
-function displayHolesSubMenu(){
-    // Remove existing menu
-    const existingMenu = document.getElementById("game-menu");
-    if (existingMenu) existingMenu.remove();
-    
-    // Create back button container
-    const backButtonContainer = document.createElement("div");
-    backButtonContainer.className = "top-button-container";
-    
-    // Create back button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    backButton.addEventListener("click", () => {
-        backButtonContainer.remove();
-        subMenuContainer.remove();
-        displayMenu();
-    });
-    backButtonContainer.appendChild(backButton);
-    
-    // Create sub-menu container
-    const subMenuContainer = document.createElement("div");
-    subMenuContainer.id = "holes-sub-menu";
-    
-    // Sub-menu items
-    const holesTypes = [
-        { title: "חפירת בור מכשול", holesType: "holes_obstacle", icon: "🕳️" },
-        { title: "חפירת בור אישי קבוצתי", holesType: "holes_personal_group", icon: "👥" }
-    ];
-    
-    holesTypes.forEach(holesOption => {
-        const btn = document.createElement("button");
-        btn.className = "game-button";
-        btn.innerHTML = `<span class="game-icon">${holesOption.icon}</span><span class="game-title">${holesOption.title}</span>`;
-        btn.addEventListener("click", function () {
-            runGame(holesOption.holesType);
-        });
-        subMenuContainer.appendChild(btn);
-    });
-    
-    // Append back button container and sub-menu after the initial element
-    initialElement.parentNode.insertBefore(backButtonContainer, initialElement.nextSibling);
-    initialElement.parentNode.insertBefore(subMenuContainer, backButtonContainer.nextSibling);
-}
-
 function runGame(gameTitle) {
     // Remove existing game/menu content after initialElement
     const existing = initialElement.nextSibling;
     if (existing) existing.remove();
-
-    // Remove sub-menu if it exists (for holes game)
-    if (gameTitle === "holes_obstacle" || gameTitle === "holes_personal_group") {
-        const subMenu = document.getElementById("holes-sub-menu");
-        if (subMenu) subMenu.remove();
-    }
 
     currentGame = gameTitle;
     activityNumberMap = JSON.parse(localStorage.getItem("gameState") || "{}");
@@ -252,11 +194,8 @@ function runGame(gameTitle) {
         case "sacks":
             sacks();
             break;
-        case "holes_obstacle":
-            holesObstacleOrPersonalGroup("holes_obstacle");
-            break;
-        case "holes_personal_group":
-            holesObstacleOrPersonalGroup("holes_personal_group");
+        case "holes":
+            holes();
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
@@ -264,23 +203,23 @@ function runGame(gameTitle) {
     }
 }
 
-function holesObstacleOrPersonalGroup(activityName){
-    // Check if sacks activity has already been submitted
+function holes(){
+    // Check if holes activity has already been submitted
     const gameState = JSON.parse(localStorage.getItem("gameState") || "{}");
-    const holesActivities = gameState[activityName] || [];
+    const holesActivities = gameState["holes"] || [];
     
     if (holesActivities.length > 0) {
         // Activity has already been submitted
         alert("מקצה זה כבר הוגש. לתיקון המקצה, עבור לעמוד תיקון תרגילים בתפריט.");
         currentGame = null;
-        displayHolesSubMenu();
+        displayMenu();
         return;
     }
 
     // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHeb[activityName];
+    activityNameDisplay.textContent = engToHeb["holes"];
     initialElement.appendChild(activityNameDisplay);
     
     // Create button container for both reset and back to menu buttons
@@ -317,7 +256,7 @@ function holesObstacleOrPersonalGroup(activityName){
     holesContainer.appendChild(assesseesList);
     
     // Load existing data from localStorage
-    const holesData = JSON.parse(localStorage.getItem(`${activityName}Data`) || "{}");
+    const holesData = JSON.parse(localStorage.getItem("holesData") || "{}");
     console.log("holesData:", holesData);
     
     // Create assessee rows
@@ -335,8 +274,7 @@ function holesObstacleOrPersonalGroup(activityName){
             "עבודת צוות", 
             "teamwork", 
             assesseeNumber, 
-            holesData, 
-            activityName
+            holesData
         );
         inputGroupsContainer.appendChild(firstInputGroup);
         
@@ -345,8 +283,7 @@ function holesObstacleOrPersonalGroup(activityName){
             "נחישות ואגרסיביות", 
             "determination", 
             assesseeNumber, 
-            holesData, 
-            activityName
+            holesData
         );
         inputGroupsContainer.appendChild(secondInputGroup);
         
@@ -370,7 +307,7 @@ function holesObstacleOrPersonalGroup(activityName){
     initialElement.appendChild(submitContainer);
     
     // Helper function to create input group with plus/minus buttons
-    function createInputGroup(label, fieldName, assesseeNumber, data, activityName) {
+    function createInputGroup(label, fieldName, assesseeNumber, data) {
         const inputGroup = document.createElement("div");
         inputGroup.className = "input-group";
         
@@ -396,7 +333,7 @@ function holesObstacleOrPersonalGroup(activityName){
                     input.style.borderColor = "#ddd";
                 }
                 
-                saveHolesData(activityName);
+                saveHolesData();
             }
         });
         
@@ -416,7 +353,7 @@ function holesObstacleOrPersonalGroup(activityName){
                 scoreInput.style.borderColor = "#ddd";
             }
             
-            saveHolesData(activityName);
+            saveHolesData();
         });
         
         const plusButton = document.createElement("button");
@@ -433,7 +370,7 @@ function holesObstacleOrPersonalGroup(activityName){
                     input.style.borderColor = "#ddd";
                 }
                 
-                saveHolesData(activityName);
+                saveHolesData();
             }
         });
         
@@ -446,7 +383,7 @@ function holesObstacleOrPersonalGroup(activityName){
     }
     
     // Helper function to save data to localStorage
-    function saveHolesData(activityName) {
+    function saveHolesData() {
         const data = {};
         document.querySelectorAll(".assessee-row").forEach(row => {
             const assesseeNumber = row.dataset.number;
@@ -455,7 +392,7 @@ function holesObstacleOrPersonalGroup(activityName){
                 determination: row.querySelector(".input-group:nth-child(2) .score-input").value
             };
         });
-        localStorage.setItem(`${activityName}Data`, JSON.stringify(data));
+        localStorage.setItem("holesData", JSON.stringify(data));
     }
     
     // Helper function to build result string
@@ -501,13 +438,13 @@ function holesObstacleOrPersonalGroup(activityName){
         currentGame = null;
         
         // Display main menu
-        displayHolesSubMenu();
+        displayMenu();
     });
     
     // Reset button event
     resetButton.addEventListener("click", () => {
         if (confirm("האם אתה בטוח שברצונך לאפס את כל הנתונים?")) {
-            localStorage.removeItem(`${activityName}Data`);
+            localStorage.removeItem("holesData");
             document.querySelectorAll(".score-input").forEach(input => {
                 input.value = "0";
             });
@@ -528,17 +465,17 @@ function holesObstacleOrPersonalGroup(activityName){
         submitButton.disabled = true;
         submitButton.textContent = "שולח...";
         
-        const succeeded = await submitActivity(currentTeamNumber, currentTeamID, activityName, 1, resultString);
+        const succeeded = await submitActivity(currentTeamNumber, currentTeamID, "holes", 1, resultString);
         
         if (succeeded) {
             // Show success toast
             showSuccessToast();
             
             // Clear localStorage after successful submission
-            localStorage.removeItem(`${activityName}Data`);
+            localStorage.removeItem("holesData");
             
             // Update activity number to track completion
-            updateActivityNumber(activityName, 1);
+            updateActivityNumber("holes", 1);
             
             // Wait 2 seconds before going back to menu
             setTimeout(() => {

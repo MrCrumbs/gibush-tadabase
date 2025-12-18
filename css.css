@@ -10,7 +10,7 @@ div[af-form]{
   display:none;
 }
 
-#game-menu, #holes-sub-menu {
+#game-menu {
   display: grid;
   gap: 20px;
   margin: 40px auto;

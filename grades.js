@@ -1,8 +1,8 @@
 var initialElementGrades = document.querySelector("article div[ui-view]");
 var currentTeamNumberGrades = "{loggedInUser.צוות שטח}";
 var engToHebTranslations = {
-    "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", "holes": "בורות",
-    "holes_obstacle": "חפירת בור מכשול", "holes_personal_group": "חפירת בור אישי קבוצתי", "sacks": "שקים"
+    "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
+    "holes": "חפירת בור", "sacks": "שקים"
 }
 
 TB.render("component_23", async function (data) {

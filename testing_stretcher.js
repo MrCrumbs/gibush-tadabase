@@ -11,7 +11,7 @@ var activityNumberMap = {};
 var numberToIdMap = {};
 var engToHeb = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-    "holes_obstacle": "חפירת בור מכשול", "holes_personal_group": "חפירת בור אישי קבוצתי", "sacks": "שקים"
+    "holes": "חפירת בור", "sacks": "שקים"
 }
 
 TB.render("component_9", async function (data) {

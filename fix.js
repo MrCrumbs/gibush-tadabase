@@ -8,11 +8,11 @@ var currentResubmitActivity = null;
 var currentResubmitActivityNumber = null;
 
 // Activity sort order - can be modified to change display order
-var activitySortOrder = ["sprints", "crawls", "sacks", "sociometric_stretcher", "holes_obstacle", "holes_personal_group"];
+var activitySortOrder = ["sprints", "crawls", "sacks", "sociometric_stretcher", "holes"];
 
 var engToHebTranslations = {
-    "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", "holes": "בורות",
-    "holes_obstacle": "חפירת בור מכשול", "holes_personal_group": "חפירת בור אישי קבוצתי", "sacks": "שקים"
+    "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
+    "holes": "חפירת בור", "sacks": "שקים"
 }
 
 TB.render("component_24", async function (data) {
@@ -272,11 +272,8 @@ function startResubmitActivity(activityName, activityNumber) {
         case "sacks":
             sacksResubmit(activityNumber);
             break;
-        case "holes_obstacle":
-            holesObstacleOrPersonalGroupResubmit("holes_obstacle", activityNumber);
-            break;
-        case "holes_personal_group":
-            holesObstacleOrPersonalGroupResubmit("holes_personal_group", activityNumber);
+        case "holes":
+            holesResubmit(activityNumber);
             break;
         case "sociometric_stretcher":
             sociometricStretcherResubmit(activityNumber);
@@ -438,11 +435,11 @@ function showDeleteSuccessToast() {
     }, 2000);
 }
 
-function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
+function holesResubmit(activityNumber){
     // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHebTranslations[activityName];
+    activityNameDisplay.textContent = engToHebTranslations["holes"];
     initialElementFixGrades.appendChild(activityNameDisplay);
     
     // Create button container for both reset and back to menu buttons
@@ -473,7 +470,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
     holesContainer.appendChild(assesseesList);
     
     // Load existing data from localStorage
-    const holesData = JSON.parse(localStorage.getItem(`${activityName}Data`) || "{}");
+    const holesData = JSON.parse(localStorage.getItem("holesData") || "{}");
     console.log("holesData:", holesData);
     
     // Create assessee rows
@@ -491,8 +488,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
             "עבודת צוות", 
             "teamwork", 
             assesseeNumber, 
-            holesData, 
-            activityName
+            holesData
         );
         inputGroupsContainer.appendChild(firstInputGroup);
         
@@ -501,8 +497,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
             "נחישות ואגרסיביות", 
             "determination", 
             assesseeNumber, 
-            holesData, 
-            activityName
+            holesData
         );
         inputGroupsContainer.appendChild(secondInputGroup);
         
@@ -526,7 +521,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
     initialElementFixGrades.appendChild(submitContainer);
     
     // Helper function to create input group with plus/minus buttons
-    function createInputGroup(label, fieldName, assesseeNumber, data, activityName) {
+    function createInputGroup(label, fieldName, assesseeNumber, data) {
         const inputGroup = document.createElement("div");
         inputGroup.className = "input-group";
         
@@ -552,7 +547,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
                     input.style.borderColor = "#ddd";
                 }
                 
-                saveHolesData(activityName);
+                saveHolesData();
             }
         });
         
@@ -572,7 +567,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
                 scoreInput.style.borderColor = "#ddd";
             }
             
-            saveHolesData(activityName);
+            saveHolesData();
         });
         
         const plusButton = document.createElement("button");
@@ -589,7 +584,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
                     input.style.borderColor = "#ddd";
                 }
                 
-                saveHolesData(activityName);
+                saveHolesData();
             }
         });
         
@@ -602,7 +597,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
     }
     
     // Helper function to save data to localStorage
-    function saveHolesData(activityName) {
+    function saveHolesData() {
         const data = {};
         document.querySelectorAll(".assessee-row").forEach(row => {
             const assesseeNumber = row.dataset.number;
@@ -611,7 +606,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
                 determination: row.querySelector(".input-group:nth-child(2) .score-input").value
             };
         });
-        localStorage.setItem(`${activityName}Data`, JSON.stringify(data));
+        localStorage.setItem("holesData", JSON.stringify(data));
     }
     
     // Helper function to build result string
@@ -659,7 +654,7 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
     // Reset button event
     resetButton.addEventListener("click", () => {
         if (confirm("האם אתה בטוח שברצונך לאפס את כל הנתונים?")) {
-            localStorage.removeItem(`${activityName}Data`);
+            localStorage.removeItem("holesData");
             document.querySelectorAll(".score-input").forEach(input => {
                 input.value = "0";
             });
@@ -680,14 +675,14 @@ function holesObstacleOrPersonalGroupResubmit(activityName, activityNumber){
         submitButton.disabled = true;
         submitButton.textContent = "שולח...";
         
-        const succeeded = await resubmitActivity(currentTeamNumberFixGrades, currentTeamIDFixGrades, activityName, currentResubmitActivityNumber, resultString);
+        const succeeded = await resubmitActivity(currentTeamNumberFixGrades, currentTeamIDFixGrades, "holes", currentResubmitActivityNumber, resultString);
         
         if (succeeded) {
             // Show success toast
             showResubmitSuccessToast();
             
             // Clear localStorage after successful submission
-            localStorage.removeItem(`${activityName}Data`);
+            localStorage.removeItem("holesData");
             
             // Wait 2 seconds before going back to activities list
             setTimeout(() => {
