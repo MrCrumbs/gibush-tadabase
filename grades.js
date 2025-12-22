@@ -2,7 +2,7 @@ var initialElementGrades = document.querySelector("article div[ui-view]");
 var currentTeamNumberGrades = "{loggedInUser.צוות שטח}";
 var engToHebTranslations = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-    "holes": "חפירת בור", "sacks": "שקים"
+    "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
 }
 
 TB.render("component_23", async function (data) {
@@ -68,7 +68,7 @@ async function fetchGradesData(){
             },
             body: JSON.stringify({
                 team_number: currentTeamNumberGrades,
-                activity_names: "sprints,crawls,sociometric_stretcher,sacks,holes"
+                activity_names: "sprints,crawls,sociometric_stretcher,sacks,holes,stretcher"
             })
         });
         
@@ -105,6 +105,7 @@ function createTable(gradesData){
             sociometric_stretcher: activities.sociometric_stretcher ?? '-',
             sacks: activities.sacks ?? '-',
             holes: activities.holes ?? '-',
+            stretcher: activities.stretcher ?? '-',
             final_grade: activities.final_grade ?? '-'
         };
         return row;
@@ -179,6 +180,16 @@ function createTable(gradesData){
         { 
             id: 'holes',
             name: 'בורות',
+            sort: true,
+            width: '100px',
+            formatter: (cell) => {
+                const className = getGradeClass(cell);
+                return gridjs.html(`<span class="${className}">${cell}</span>`);
+            }
+        },
+        { 
+            id: 'stretcher',
+            name: 'מסע אלונקה',
             sort: true,
             width: '100px',
             formatter: (cell) => {

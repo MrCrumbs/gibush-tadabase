@@ -51,7 +51,7 @@ function hideLoading() {
 function showActivityStatus(data) {
     var engToHebTranslations = {
         "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-        "holes": "חפירת בור", "sacks": "שקים"
+        "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
     }
     
     // Remove existing table if present
@@ -67,7 +67,8 @@ function showActivityStatus(data) {
         'crawls',
         'sociometric_stretcher',
         'sacks',
-        'holes'
+        'holes',
+        'stretcher'
     ];
 
     // Helper to compute the maximum numeric value from an array of strings

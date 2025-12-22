@@ -11,7 +11,7 @@ var activityNumberMap = {};
 var numberToIdMap = {};
 var engToHeb = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-    "holes": "חפירת בור", "sacks": "שקים"
+    "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
 }
 
 TB.render("component_9", async function (data) {
@@ -50,6 +50,9 @@ TB.render("component_9", async function (data) {
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
+            break;
+        case "stretcher":
+            stretcher(nextActivityNumber);
             break;
     }
 });
@@ -156,7 +159,8 @@ function displayMenu(){
         { title: "זחילות", translatedTitle: "crawls", icon: "🐛" },
         { title: "שקים", translatedTitle: "sacks", icon: "🎒" },
         { title: "בורות", translatedTitle: "holes", icon: "🕳️" },
-        { title: "אלונקה", translatedTitle: "sociometric_stretcher", icon: "🚑️" }
+        { title: "אלונקה סוציומטרית", translatedTitle: "sociometric_stretcher", icon: "🚑️" },
+        { title: "מסע אלונקה", translatedTitle: "stretcher", icon: "🛏️" }
     ];
 
     games.forEach(game => {
@@ -199,6 +203,9 @@ function runGame(gameTitle) {
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
+            break;
+        case "stretcher":
+            stretcher(nextActivityNumber);
             break;
     }
 }
@@ -794,6 +801,303 @@ function sacks(){
             }
         });
         return results.join(",");
+    }
+}
+
+function stretcher(activityNumber){
+    // Create and display the activity name banner
+    const activityNameDisplay = document.createElement("div");
+    activityNameDisplay.className = "activity-name-banner";
+    activityNameDisplay.textContent = engToHeb["stretcher"];
+    initialElement.appendChild(activityNameDisplay);
+    
+    // Create and display the activity number banner
+    const activityNumberDisplay = document.createElement("div");
+    activityNumberDisplay.className = "activity-number-banner";
+    activityNumberDisplay.textContent = `מקצה נוכחי: ${activityNumber}`;
+    initialElement.appendChild(activityNumberDisplay);
+    
+    // Create button container for both reset and back to menu buttons
+    const topButtonContainer = document.createElement("div");
+    topButtonContainer.className = "top-button-container";
+    initialElement.appendChild(topButtonContainer);
+    
+    // Create back to menu button
+    const backButton = document.createElement("button");
+    backButton.className = "back-button";
+    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
+    topButtonContainer.appendChild(backButton);
+    
+    // Create reset button
+    const resetButton = document.createElement("button");
+    resetButton.className = "reset-button";
+    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
+    topButtonContainer.appendChild(resetButton);
+    
+    // Create instructions div
+    const instructionsDiv = document.createElement("div");
+    instructionsDiv.className = "instructions";
+    instructionsDiv.textContent = "לחיצה על הכדור מוסיפה נקודה. לחיצה ארוכה להורדת נקודות.";
+    initialElement.appendChild(instructionsDiv);
+    
+    // Undo button (cancel last action)
+    const actionStack = [];
+    const undoButton = document.createElement("button");
+    undoButton.className = "undo-button";
+    undoButton.textContent = "בטל פעולה אחרונה";
+    undoButton.disabled = true;
+    const updateUndoButtonState = () => {
+        undoButton.disabled = actionStack.length === 0;
+    };
+    undoButton.addEventListener("click", () => {
+        const last = actionStack.pop();
+        if (!last) return;
+        const card = document.querySelector(`.assessee-card[data-number="${last.number}"]`);
+        const lapCounter = card?.querySelector(".lap-counter");
+        if (!lapCounter) return;
+        const current = parseInt(lapCounter.textContent) || 0;
+        // Inverse the last delta
+        const next = Math.max(0, current - last.delta);
+        lapCounter.textContent = next.toString();
+        saveStretcherData();
+        updateUndoButtonState();
+    });
+    initialElement.appendChild(undoButton);
+    
+    // Create main container
+    const stretcherContainer = document.createElement("div");
+    stretcherContainer.className = "sacks-container";
+    initialElement.appendChild(stretcherContainer);
+    
+    // Create grid for assessees
+    const assesseesGrid = document.createElement("div");
+    assesseesGrid.className = "assessees-grid";
+    stretcherContainer.appendChild(assesseesGrid);
+    
+    // Load existing data from localStorage
+    const stretcherData = JSON.parse(localStorage.getItem("stretcherData") || "{}");
+    
+    // Create assessee balls
+    assesseeNumbers.forEach(assesseeNumber => {
+        const assesseeCard = document.createElement("div");
+        assesseeCard.className = "assessee-card";
+        assesseeCard.dataset.number = assesseeNumber;
+
+        const ball = document.createElement("div");
+        ball.className = "assessee-ball";
+        ball.textContent = assesseeNumber;
+
+        const lapCounter = document.createElement("div");
+        lapCounter.className = "lap-counter";
+        lapCounter.textContent = stretcherData[assesseeNumber] || "0";
+
+        // Interaction: tap to increment, long-press to show minus button
+        let pressTimer = null;
+        let longPressTriggered = false;
+        let minusButton = null;
+
+        const clearPressTimer = () => {
+            if (pressTimer) {
+                clearTimeout(pressTimer);
+                pressTimer = null;
+            }
+        };
+
+        const hideMinusButton = () => {
+            if (minusButton) {
+                minusButton.remove();
+                minusButton = null;
+            }
+        };
+
+        ball.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
+            longPressTriggered = false;
+            hideMinusButton(); // Hide any existing minus button
+            
+            pressTimer = setTimeout(() => {
+                longPressTriggered = true;
+                
+                // Create and show minus button above the ball
+                minusButton = document.createElement("button");
+                minusButton.className = "long-press-minus";
+                minusButton.textContent = "-";
+                minusButton.style.position = "absolute";
+                
+                // Position the minus button to the left of the ball
+                const ballRect = ball.getBoundingClientRect();
+                minusButton.style.left = (ballRect.left - 30) + "px";
+                minusButton.style.top = (ballRect.top + ballRect.height/2 - 12) + "px";
+                minusButton.style.zIndex = "1000";
+                
+                // Add click event to decrement
+                minusButton.addEventListener("click", () => {
+                    const currentCount = parseInt(lapCounter.textContent) || 0;
+                    if (currentCount > 0) {
+                        lapCounter.textContent = (currentCount - 1).toString();
+                        actionStack.push({ number: assesseeNumber, delta: -1 });
+                        updateUndoButtonState();
+                        saveStretcherData();
+                    }
+                    hideMinusButton();
+                });
+                
+                document.body.appendChild(minusButton);
+                
+                // Auto-hide after 3 seconds
+                setTimeout(hideMinusButton, 3000);
+            }, 500);
+        });
+
+        ball.addEventListener("pointerup", (e) => {
+            e.preventDefault();
+            if (!longPressTriggered) {
+                const currentCount = parseInt(lapCounter.textContent) || 0;
+                lapCounter.textContent = (currentCount + 1).toString();
+                actionStack.push({ number: assesseeNumber, delta: +1 });
+                updateUndoButtonState();
+                saveStretcherData();
+            }
+            clearPressTimer();
+        });
+
+        ball.addEventListener("pointercancel", clearPressTimer);
+        ball.addEventListener("pointerleave", clearPressTimer);
+
+        assesseeCard.appendChild(lapCounter);
+        assesseeCard.appendChild(ball);
+        assesseesGrid.appendChild(assesseeCard);
+    });
+    
+    // Create submit container
+    const submitContainer = document.createElement("div");
+    submitContainer.className = "submit-container";
+    const submitButton = document.createElement("button");
+    submitButton.className = "submit-button";
+    submitButton.textContent = "שליחה";
+    submitContainer.appendChild(submitButton);
+    initialElement.appendChild(submitContainer);
+    
+    // Back button event
+    backButton.addEventListener("click", () => {
+        // Remove all created elements after initialElement
+        stretcherContainer.remove();
+        submitContainer.remove();
+        topButtonContainer.remove();
+        activityNameDisplay.remove();
+        activityNumberDisplay.remove();
+        instructionsDiv.remove();
+        undoButton.remove();
+
+        // Reset current game
+        currentGame = null;
+        
+        // Display main menu
+        displayMenu();
+    });
+    
+    // Reset button event
+    resetButton.addEventListener("click", () => {
+        if (confirm("האם אתה בטוח שברצונך לאפס את כל הנתונים?")) {
+            localStorage.removeItem("stretcherData");
+            document.querySelectorAll(".lap-counter").forEach(counter => {
+                counter.textContent = "0";
+            });
+            actionStack.length = 0;
+            updateUndoButtonState();
+        }
+    });
+    
+    // Submit button event
+    submitButton.addEventListener("click", async () => {
+        // Show loading
+        showLoading();
+        
+        // Build result string
+        const resultString = buildStretcherResultString();
+        console.log("resultString:", resultString);
+        if (resultString.length === 0) {
+            hideLoading();
+            alert("לא ניתן לשלוח מקצה ריק.");
+            return;
+        }
+
+        // Show loading state
+        submitButton.disabled = true;
+        submitButton.textContent = "שולח...";
+        
+        // Submit activity
+        const succeeded = await submitActivity(currentTeamNumber, currentTeamID, "stretcher", activityNumber, resultString);
+        
+        // Hide loading
+        hideLoading();
+        
+        if (succeeded) {
+            // Show loading state
+            submitButton.disabled = false;
+            submitButton.textContent = "שליחה";
+
+            // Show success toast
+            showSuccessToast("הטופס נשלח בהצלחה!");
+            
+            // Clear localStorage after successful submission
+            localStorage.removeItem("stretcherData");
+            
+            // Update activity number to track completion
+            updateActivityNumber("stretcher", activityNumber);
+            activityNumber += 1;
+            console.log("incremented activity number locally to: ", activityNumber);
+            
+            // Reset game for next activity
+            resetGame();
+        } else {
+            alert("שגיאה בשליחת נתונים לשרת. נא לנסות שנית.");
+            // Show loading state
+            submitButton.disabled = false;
+            submitButton.textContent = "שליחה";
+        }
+    });
+    
+    // Helper function to save data to localStorage
+    function saveStretcherData() {
+        const data = {};
+        document.querySelectorAll(".assessee-card").forEach(card => {
+            const number = card.dataset.number;
+            const count = parseInt(card.querySelector(".lap-counter").textContent);
+            data[number] = count;
+        });
+        localStorage.setItem("stretcherData", JSON.stringify(data));
+    }
+    
+    // Helper function to build result string
+    function buildStretcherResultString() {
+        const results = [];
+        document.querySelectorAll(".assessee-card").forEach(card => {
+            const number = card.dataset.number;
+            const count = parseInt(card.querySelector(".lap-counter").textContent);
+            const id = numberToIdMap[number];
+            if (count > 0) {
+                results.push(`${number}:${id}-${count}`);
+            }
+        });
+        return results.join(",");
+    }
+    
+    // Helper function to reset game for next activity
+    function resetGame() {
+        // Reset all counters
+        document.querySelectorAll(".lap-counter").forEach(counter => {
+            counter.textContent = "0";
+        });
+        actionStack.length = 0;
+        updateUndoButtonState();
+        
+        // Update activity number banner
+        const banner = document.querySelector(".activity-number-banner");
+        if (banner) {
+            console.log("in resetGame, displaying banner with activity number: ", activityNumber);
+            banner.textContent = `מקצה נוכחי: ${activityNumber}`;
+        }
     }
 }
 
