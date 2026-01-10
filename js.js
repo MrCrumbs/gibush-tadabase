@@ -276,18 +276,18 @@ function holes(){
         const inputGroupsContainer = document.createElement("div");
         inputGroupsContainer.className = "input-groups-container";
         
-        // Create first input group (עבודת צוות)
+        // Create first input group (ערבות הדדית)
         const firstInputGroup = createInputGroup(
-            "עבודת צוות", 
+            "ערבות הדדית", 
             "teamwork", 
             assesseeNumber, 
             holesData
         );
         inputGroupsContainer.appendChild(firstInputGroup);
         
-        // Create second input group (נחישות ואגרסיביות)
+        // Create second input group (רוח לחימה ומוטיבציה)
         const secondInputGroup = createInputGroup(
-            "נחישות ואגרסיביות", 
+            "רוח לחימה ומוטיבציה", 
             "determination", 
             assesseeNumber, 
             holesData
