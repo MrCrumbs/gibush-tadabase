@@ -862,7 +862,6 @@ body {
     border: none;
     box-shadow: none;
     transition: transform 0.1s;
-    position: relative;
     /* Prevent double-tap zoom on mobile */
     touch-action: manipulation;
     -webkit-touch-callout: none;
@@ -905,7 +904,6 @@ body {
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(244, 67, 54, 0.4);
     transition: transform 0.1s;
-    position: absolute;
 }
 
 .long-press-minus:hover {
@@ -943,9 +941,6 @@ body {
     .assessees-grid {
         gap: 6px;
     }
-    .assessee-card {
-        gap: 3px;
-    }
     .assessee-ball {
         width: 48px;
         height: 48px;
@@ -961,9 +956,6 @@ body {
 @media (max-width: 480px) {
     .assessees-grid {
         gap: 4px;
-    }
-    .assessee-card {
-        gap: 2px;
     }
     .assessee-ball {
         width: 44px;
@@ -1043,7 +1035,7 @@ body {
 
 .assessee-row {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     justify-content: space-between;
     gap: 20px;
     padding: 20px;
@@ -1065,6 +1057,8 @@ body {
     /* gap: 20px; */
     flex: 1;
     order: 1; /* Keep on the left */
+    align-self: stretch;
+    align-items: stretch;
 }
 
 .assessee-row:hover {
@@ -1087,6 +1081,7 @@ body {
     align-items: center;
     gap: 8px;
     flex: 1;
+    justify-content: space-between;
 }
 
 .input-label {
@@ -1101,6 +1096,11 @@ body {
     align-items: center;
     gap: 8px;
 }
+
+.assessee-number-holes {
+    align-self: center;
+}
+
 
 .input-button {
     width: 35px;
