@@ -1919,6 +1919,13 @@ function sprintsOrCrawls(activityName, activityNumber){
         console.log("raceAssesseesOrder: ", raceAssesseesOrder);
     }
 
+    function scrollNewRaceBlockIntoView(el) {
+        if (!el || !el.isConnected) return;
+        requestAnimationFrame(() => {
+            el.scrollIntoView({ block: "nearest", behavior: "smooth", inline: "nearest" });
+        });
+    }
+
     function getScrollableParent(el) {
         while (el) {
             const style = getComputedStyle(el);
@@ -2027,7 +2034,8 @@ function sprintsOrCrawls(activityName, activityNumber){
         });
     }
 
-    function addAssesseeToRaceBracket(number) {
+    function addAssesseeToRaceBracket(number, options = {}) {
+        const { suppressScroll = false } = options;
         const block = document.querySelector(`.bucket-block[data-number="${number}"]`);
         if (!block || block.style.display === "none") return;
 
@@ -2077,6 +2085,7 @@ function sprintsOrCrawls(activityName, activityNumber){
         });
 
         initDrag(blockWrapper);
+        if (!suppressScroll) scrollNewRaceBlockIntoView(blockWrapper);
     }
 
     const { topButtonContainer, backButton, resetButton, submitButton } = createGameTopToolbar(initialElement, {
@@ -2112,7 +2121,9 @@ function sprintsOrCrawls(activityName, activityNumber){
             orderSection.style.width = "";
             document.querySelector(".bucket-section").style.display = "flex";
             currentIndex = 0;
-            filtered.forEach((num) => addAssesseeToRaceBracket(num));
+            filtered.forEach((num) => addAssesseeToRaceBracket(num, { suppressScroll: true }));
+            const lastRaceWrapper = bracket.querySelector(".block-wrapper:last-child");
+            scrollNewRaceBlockIntoView(lastRaceWrapper);
             updateResultString();
         },
     });

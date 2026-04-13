@@ -426,20 +426,22 @@ order: 2;
 background-color: #d32f2f;
 }
 
-/* Bucket Section */
+/* Bucket Section — sticky below host chrome + absolute back/help on .tb-main-content */
 .bucket-section {
 flex: 0 0 50%;
 margin-right: 10px;
 padding: 10px;
 border: 1px solid #ccc;
 border-radius: 5px;
-max-height: 100vh;
+--game-bucket-sticky-gap: 84px;
+top: calc(env(safe-area-inset-top, 0px) + var(--game-bucket-sticky-gap));
+max-height: calc(100vh - env(safe-area-inset-top, 0px) - var(--game-bucket-sticky-gap));
+max-height: calc(100dvh - env(safe-area-inset-top, 0px) - var(--game-bucket-sticky-gap));
 overflow-y: auto;
 display: flex;
 flex-direction: column;
 justify-content: flex-start;
 position: sticky;
-top: 0;
 align-self: flex-start;
 }
 

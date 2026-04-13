@@ -2048,6 +2048,13 @@ function sprintsOrCrawlsResubmit(activityName, activityNumber){
     
     let currentIndex = 0;
     let currentClone = null;
+
+    function scrollNewRaceBlockIntoView(el) {
+        if (!el || !el.isConnected) return;
+        requestAnimationFrame(() => {
+            el.scrollIntoView({ block: "nearest", behavior: "smooth", inline: "nearest" });
+        });
+    }
     
     document.querySelectorAll(".bucket-block").forEach((block) => {
         block.addEventListener("click", () => {
@@ -2100,6 +2107,7 @@ function sprintsOrCrawlsResubmit(activityName, activityNumber){
             });
     
             initDrag(blockWrapper);
+            scrollNewRaceBlockIntoView(blockWrapper);
         });
     });
     
@@ -2109,7 +2117,7 @@ function sprintsOrCrawlsResubmit(activityName, activityNumber){
         raceAssesseesOrder = numbers.join(",");
         console.log("raceAssesseesOrder: ", raceAssesseesOrder);
     }
-    
+
     function getScrollableParent(el) {
         while (el) {
             const style = getComputedStyle(el);
