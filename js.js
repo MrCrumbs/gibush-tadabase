@@ -210,6 +210,185 @@ function runGame(gameTitle) {
     }
 }
 
+/** Top bar: שליחה, optional סדר קודם, איפוס (RTL); back button top-right with → arrow. */
+function createGameTopToolbar(parent, options) {
+    options = options || {};
+    const includeLoadPrevious = options.includeLoadPrevious !== false;
+
+    const topButtonContainer = document.createElement("div");
+    topButtonContainer.className = "top-button-container game-top-toolbar";
+    parent.appendChild(topButtonContainer);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "top-button-actions";
+    topButtonContainer.appendChild(actionsRow);
+
+    const submitButton = document.createElement("button");
+    submitButton.className = "submit-button submit-button--toolbar";
+    submitButton.type = "button";
+    submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
+    actionsRow.appendChild(submitButton);
+
+    let loadPreviousButton = null;
+    if (includeLoadPrevious) {
+        loadPreviousButton = document.createElement("button");
+        loadPreviousButton.className = "load-previous-arrangement-button";
+        loadPreviousButton.type = "button";
+        loadPreviousButton.innerHTML = '<i class="fas fa-clone"></i> סדר קודם';
+        actionsRow.appendChild(loadPreviousButton);
+        loadPreviousButton.addEventListener("click", async () => {
+            if (typeof options.onLoadPrevious === "function") {
+                loadPreviousButton.disabled = true;
+                try {
+                    await options.onLoadPrevious();
+                } catch (e) {
+                    console.error(e);
+                    alert("שגיאה בטעינת סידור קודם.");
+                } finally {
+                    loadPreviousButton.disabled = false;
+                }
+            } else {
+                alert("פיצ'ר בבנייה");
+            }
+        });
+    }
+
+    const resetButton = document.createElement("button");
+    resetButton.className = "reset-button";
+    resetButton.type = "button";
+    resetButton.innerHTML = '<i class="fas fa-undo"></i> איפוס';
+    actionsRow.appendChild(resetButton);
+
+    const backButton = document.createElement("button");
+    backButton.className = "back-button game-toolbar-back";
+    backButton.type = "button";
+    backButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+    let mainContent = parent.closest(".tb-main-content");
+    if (!mainContent) {
+        mainContent = parent.querySelector(".tb-main-content");
+    }
+    if (mainContent) {
+        mainContent.appendChild(backButton);
+    } else {
+        topButtonContainer.appendChild(backButton);
+    }
+
+    return {
+        topButtonContainer,
+        actionsRow,
+        backButton,
+        resetButton,
+        loadPreviousButton,
+        submitButton,
+    };
+}
+
+function setActivityTitleBannerContent(bannerEl, activityLabel, heatNumber) {
+    bannerEl.replaceChildren();
+    const namePart = document.createElement("span");
+    namePart.className = "activity-title-name";
+    namePart.textContent = activityLabel;
+    const heatPart = document.createElement("span");
+    heatPart.className = "activity-heat-suffix";
+    heatPart.textContent = ` (מקצה ${heatNumber})`;
+    bannerEl.appendChild(namePart);
+    bannerEl.appendChild(heatPart);
+}
+
+/** "?" top-left of .tb-main-content (mirror of back); opens instructions modal. Call destroy() when leaving activity. */
+function createActivityInstructionsModal(parent, instructionText) {
+    let mainContent = parent.closest(".tb-main-content");
+    if (!mainContent) {
+        mainContent = parent.querySelector(".tb-main-content");
+    }
+
+    const helpButton = document.createElement("button");
+    helpButton.type = "button";
+    helpButton.className = "help-button game-toolbar-help";
+    helpButton.setAttribute("aria-label", "הוראות");
+    helpButton.textContent = "?";
+
+    let parentPositionRestore = null;
+    if (mainContent) {
+        mainContent.appendChild(helpButton);
+    } else {
+        const prev = parent.style.position;
+        if (!prev || prev === "static") {
+            parent.style.position = "relative";
+            parentPositionRestore = prev || "";
+        }
+        helpButton.classList.add("game-toolbar-help--in-parent");
+        parent.appendChild(helpButton);
+    }
+
+    const modalRoot = document.createElement("div");
+    modalRoot.className = "activity-instructions-modal";
+    modalRoot.setAttribute("role", "dialog");
+    modalRoot.setAttribute("aria-modal", "true");
+    modalRoot.setAttribute("aria-hidden", "true");
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "activity-instructions-modal__backdrop";
+
+    const panel = document.createElement("div");
+    panel.className = "activity-instructions-modal__panel";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "activity-instructions-modal__title";
+    titleEl.textContent = "הוראות";
+
+    const bodyEl = document.createElement("div");
+    bodyEl.className = "activity-instructions-modal__body";
+    bodyEl.textContent = instructionText;
+
+    const dismissBtn = document.createElement("button");
+    dismissBtn.type = "button";
+    dismissBtn.className = "activity-instructions-modal__dismiss";
+    dismissBtn.setAttribute("aria-label", "סגור");
+    dismissBtn.textContent = "\u00D7";
+
+    panel.appendChild(dismissBtn);
+    panel.appendChild(titleEl);
+    panel.appendChild(bodyEl);
+    modalRoot.appendChild(backdrop);
+    modalRoot.appendChild(panel);
+    document.body.appendChild(modalRoot);
+
+    function onKeyDown(e) {
+        if (e.key === "Escape") {
+            closeModal();
+        }
+    }
+
+    function openModal() {
+        modalRoot.classList.add("is-open");
+        modalRoot.setAttribute("aria-hidden", "false");
+        document.addEventListener("keydown", onKeyDown);
+    }
+
+    function closeModal() {
+        modalRoot.classList.remove("is-open");
+        modalRoot.setAttribute("aria-hidden", "true");
+        document.removeEventListener("keydown", onKeyDown);
+    }
+
+    helpButton.addEventListener("click", openModal);
+    backdrop.addEventListener("click", closeModal);
+    dismissBtn.addEventListener("click", closeModal);
+
+    function destroy() {
+        closeModal();
+        helpButton.remove();
+        modalRoot.remove();
+        document.removeEventListener("keydown", onKeyDown);
+        if (parentPositionRestore !== null) {
+            parent.style.position = parentPositionRestore;
+        }
+    }
+
+    return { helpButton, modalRoot, destroy };
+}
+
 function holes(){
     // Check if holes activity has already been submitted
     const gameState = JSON.parse(localStorage.getItem("gameState") || "{}");
@@ -246,11 +425,10 @@ function holes(){
     resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
     topButtonContainer.appendChild(resetButton);
     
-    // Create instructions div
-    const instructionsDiv = document.createElement("div");
-    instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "דרג כל מוערך בכל תחום מ־1 (נמוך) עד 6 (גבוה).";
-    initialElement.appendChild(instructionsDiv);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElement,
+        "דרג כל מוערך בכל תחום מ־1 (נמוך) עד 6 (גבוה)."
+    );
     
     // Create main container
     const holesContainer = document.createElement("div");
@@ -439,7 +617,7 @@ function holes(){
         submitContainer.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
-        instructionsDiv.remove();
+        instructionsUI.destroy();
 
         // Reset current game
         currentGame = null;
@@ -491,7 +669,7 @@ function holes(){
                 submitContainer.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
-                instructionsDiv.remove();
+                instructionsUI.destroy();
                 
                 // Reset current game
                 currentGame = null;
@@ -526,28 +704,13 @@ function sacks(){
     activityNameDisplay.textContent = engToHeb["sacks"];
     initialElement.appendChild(activityNameDisplay);
     
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElement.appendChild(topButtonContainer);
+    const { topButtonContainer, backButton, resetButton, submitButton } =
+        createGameTopToolbar(initialElement, { includeLoadPrevious: false });
     
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
-    // Create instructions div
-    const instructionsDiv = document.createElement("div");
-    instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "לחיצה על הכדור מוסיפה הקפה. לחיצה ארוכה להורדת הקפות.";
-    initialElement.appendChild(instructionsDiv);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElement,
+        "לחיצה על הכדור מוסיפה הקפה. לחיצה ארוכה להורדת הקפות."
+    );
     
     // Undo button (cancel last action)
     const actionStack = [];
@@ -678,23 +841,14 @@ function sacks(){
         assesseesGrid.appendChild(assesseeCard);
     });
     
-    // Create submit container
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElement.appendChild(submitContainer);
-    
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
         sacksContainer.remove();
-        submitContainer.remove();
+        backButton.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
-        instructionsDiv.remove();
+        instructionsUI.destroy();
         undoButton.remove();
 
         // Reset current game
@@ -761,10 +915,10 @@ function sacks(){
 
                 // Remove all created elements after initialElement
                 sacksContainer.remove();
-                submitContainer.remove();
+                backButton.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
-                instructionsDiv.remove();
+                instructionsUI.destroy();
                 undoButton.remove();
                 
                 // Display main menu
@@ -805,40 +959,19 @@ function sacks(){
 }
 
 function stretcher(activityNumber){
-    // Create and display the activity name banner
+    const activityLabel = engToHeb["stretcher"];
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHeb["stretcher"];
+    setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElement.appendChild(activityNameDisplay);
     
-    // Create and display the activity number banner
-    const activityNumberDisplay = document.createElement("div");
-    activityNumberDisplay.className = "activity-number-banner";
-    activityNumberDisplay.textContent = `מקצה נוכחי: ${activityNumber}`;
-    initialElement.appendChild(activityNumberDisplay);
+    const { topButtonContainer, backButton, resetButton, submitButton } =
+        createGameTopToolbar(initialElement, { includeLoadPrevious: false });
     
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElement.appendChild(topButtonContainer);
-    
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
-    // Create instructions div
-    const instructionsDiv = document.createElement("div");
-    instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "לחיצה על הכדור מוסיפה נקודה. לחיצה ארוכה להורדת נקודות.";
-    initialElement.appendChild(instructionsDiv);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElement,
+        "לחיצה על הכדור מוסיפה נקודה. לחיצה ארוכה להורדת נקודות."
+    );
     
     // Undo button (cancel last action)
     const actionStack = [];
@@ -969,24 +1102,14 @@ function stretcher(activityNumber){
         assesseesGrid.appendChild(assesseeCard);
     });
     
-    // Create submit container
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElement.appendChild(submitContainer);
-    
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
         stretcherContainer.remove();
-        submitContainer.remove();
+        backButton.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
-        activityNumberDisplay.remove();
-        instructionsDiv.remove();
+        instructionsUI.destroy();
         undoButton.remove();
 
         // Reset current game
@@ -1092,11 +1215,10 @@ function stretcher(activityNumber){
         actionStack.length = 0;
         updateUndoButtonState();
         
-        // Update activity number banner
-        const banner = document.querySelector(".activity-number-banner");
+        const banner = document.querySelector(".activity-name-banner");
         if (banner) {
             console.log("in resetGame, displaying banner with activity number: ", activityNumber);
-            banner.textContent = `מקצה נוכחי: ${activityNumber}`;
+            setActivityTitleBannerContent(banner, activityLabel, activityNumber);
         }
     }
 }
@@ -1106,52 +1228,20 @@ function sociometricStretcher(activityNumber){
     let autoScrollInterval = null;
     let lastBucketDragTargetBracket = null;
 
-    // Create and display the activity name banner
+    const activityLabel = engToHeb["sociometric_stretcher"];
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHeb["sociometric_stretcher"];
+    setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElement.appendChild(activityNameDisplay);
     
-    // Create and display the activity number banner
-    const activityNumberDisplay = document.createElement("div");
-    activityNumberDisplay.className = "activity-number-banner";
-    activityNumberDisplay.textContent = `מקצה נוכחי: ${activityNumber}`;
-    initialElement.appendChild(activityNumberDisplay);
-    
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElement.appendChild(topButtonContainer);
-    
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
-    // Create instructions div
-    const instructionsDiv = document.createElement("div");
-    instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "גררו כל מוערך לריבוע לפי המשימה שביצע.";
-    initialElement.appendChild(instructionsDiv);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElement,
+        "גררו כל מוערך לריבוע לפי המשימה שביצע."
+    );
 
     const gameLayout = document.createElement("div");
     gameLayout.className = "stretcher-game-layout";
     initialElement.appendChild(gameLayout);
-    
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElement.appendChild(submitContainer);
     
     const bucketSection = document.createElement("div");
     bucketSection.className = "stretcher-bucket-section";
@@ -1591,6 +1681,56 @@ function sociometricStretcher(activityNumber){
         });
     }
 
+    async function applyPreviousSociometricArrangement() {
+        if (activityNumber <= 1) {
+            alert("אין מקצה קודם לטעינה.");
+            return;
+        }
+        showLoading();
+        let order;
+        try {
+            order = await fetchPreviousHeatRaceOrder(
+                currentTeamNumber,
+                "sociometric_stretcher",
+                activityNumber - 1
+            );
+        } catch (e) {
+            console.error(e);
+            hideLoading();
+            alert("שגיאה בטעינת נתונים מהשרת.");
+            return;
+        }
+        hideLoading();
+        const allowed = new Set(assesseeNumbers.map(String));
+        const filtered = order.filter((n) => allowed.has(String(n)));
+        if (filtered.length === 0) {
+            alert("לא נמצאו נתוני מיקום במקצה הקודם.");
+            return;
+        }
+        brackets.forEach((br) => {
+            br.querySelectorAll(".block-wrapper").forEach((w) => returnToBucket(w));
+        });
+        const totalCap = limits.reduce((a, b) => a + b, 0);
+        const pool = filtered.slice(0, totalCap);
+        let offset = 0;
+        for (let bi = 0; bi < brackets.length; bi++) {
+            const cap = limits[bi];
+            const slice = pool.slice(offset, offset + cap);
+            offset += cap;
+            for (const num of slice) {
+                createBlockInBracket(num, brackets[bi]);
+            }
+        }
+        updateUI();
+    }
+
+    const sociometricToolbar = createGameTopToolbar(initialElement, {
+        onLoadPrevious: applyPreviousSociometricArrangement,
+    });
+    const { topButtonContainer, backButton, resetButton, submitButton } = sociometricToolbar;
+    topButtonContainer.remove();
+    activityNameDisplay.insertAdjacentElement("afterend", topButtonContainer);
+
     document.querySelectorAll(".bucket-block").forEach((block) => {
         block.addEventListener("dragstart", (e) =>
             e.dataTransfer.setData("text/plain", block.dataset.number)
@@ -1621,17 +1761,13 @@ function sociometricStretcher(activityNumber){
         // Remove all game content (button container and game layout)
         const buttonContainer = initialElement.querySelector('.top-button-container');
         const gameLayout = initialElement.querySelector('.stretcher-game-layout');
-        const submitContainer = initialElement.querySelector('.submit-container');
-        const activityNumberBanner = initialElement.querySelector('.activity-number-banner');
         const activityNameDisplay = initialElement.querySelector('.activity-name-banner');
-        const instructionsDiv = initialElement.querySelector('.instructions');
 
+        backButton.remove();
         if (buttonContainer) buttonContainer.remove();
         if (gameLayout) gameLayout.remove();
-        if (submitContainer) submitContainer.remove();
-        if (activityNumberBanner) activityNumberBanner.remove();
         if (activityNameDisplay) activityNameDisplay.remove();
-        if (instructionsDiv) instructionsDiv.remove();
+        instructionsUI.destroy();
         
         // Reset current game
         currentGame = null;
@@ -1744,10 +1880,10 @@ function sociometricStretcher(activityNumber){
         if (bucketSection) bucketSection.style.display = "flex";
         if (orderSection) orderSection.style.display = "flex";
 
-        const banner = document.querySelector(".activity-number-banner");
+        const banner = document.querySelector(".activity-name-banner");
         if (banner) {
             console.log ("in resetGame, displaying banner with activity number: ", activityNumber);
-            banner.textContent = `מקצה נוכחי: ${activityNumber}`;
+            setActivityTitleBannerContent(banner, activityLabel, activityNumber);
         }
 
         updateUI();
@@ -1765,157 +1901,29 @@ function updateActivityNumber(activityName, activityNumber){
 }
 
 function sprintsOrCrawls(activityName, activityNumber){
-    // Create and display the activity name banner
+    const activityLabel = engToHeb[activityName] || activityName;
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHeb[activityName] || activityName;
+    setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElement.appendChild(activityNameDisplay);
-    
-    // Create and display the activity number banner
-    const activityNumberDisplay = document.createElement("div");
-    activityNumberDisplay.className = "activity-number-banner";
-    activityNumberDisplay.textContent = `מקצה נוכחי: ${activityNumber}`;
-    initialElement.appendChild(activityNumberDisplay);
 
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElement.appendChild(topButtonContainer);
-    
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
-    // Create instructions div
-    const instructionsDiv = document.createElement("div");
-    instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון.";
-    initialElement.appendChild(instructionsDiv);
-    
-    const gameLayout = document.createElement("div");
-    gameLayout.className = "game-layout";
-    initialElement.appendChild(gameLayout);
-    
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElement.appendChild(submitContainer);
-    
-    const bucketSection = document.createElement("div");
-    bucketSection.className = "bucket-section";
-    gameLayout.appendChild(bucketSection);
-    
-    const bucketTitle = document.createElement("div");
-    bucketTitle.className = "bucket-title";
-    bucketTitle.textContent = "בחר מוערכים";
-    bucketSection.appendChild(bucketTitle);
-    
-    const bucketItems = document.createElement("div");
-    bucketItems.className = "bucket-items";
-    bucketSection.appendChild(bucketItems);
-    
-    for (let i = 0; i < assesseeNumbers.length; i++) {
-        const block = document.createElement("div");
-        block.className = "bucket-block";
-        block.dataset.number = assesseeNumbers[i];
-        block.textContent = assesseeNumbers[i];
-        bucketItems.appendChild(block);
-    }
-    
-    const orderSection = document.createElement("div");
-    orderSection.className = "order-section";
-    gameLayout.appendChild(orderSection);
-    
-    const bracket = document.createElement("div");
-    bracket.className = "bracket";
-    bracket.setAttribute("data-max-capacity", "7");
-    orderSection.appendChild(bracket);
-    
-    const bracketTitle = document.createElement("div");
-    bracketTitle.className = "bracket-title";
-    bracketTitle.textContent = "Box Section 1";
-    // bracket.appendChild(bracketTitle);
-    
+    let bracket;
+    let orderSection;
     let currentIndex = 0;
     let currentClone = null;
-    
-    document.querySelectorAll(".bucket-block").forEach((block) => {
-        block.addEventListener("click", () => {
-            const number = block.dataset.number;
-            
-            const blockWrapper = document.createElement("div");
-            blockWrapper.className = "block-wrapper";
-            blockWrapper.setAttribute("data-index", currentIndex);
-            
-            const blockInner = document.createElement("div");
-            blockInner.className = "block";
-            blockInner.setAttribute("data-original-number", number);
-            
-            const numberSpan = document.createElement("span");
-            numberSpan.className = "number";
-            numberSpan.textContent = number;
-            
-            const removeBtn = document.createElement("button");
-            removeBtn.className = "remove-button";
-            removeBtn.textContent = "x";
-            
-            blockInner.appendChild(numberSpan);
-            blockInner.appendChild(removeBtn);
-            blockWrapper.appendChild(blockInner);
-            bracket.appendChild(blockWrapper);
-            block.style.display = "none";
-            
-            if (document.querySelectorAll(".bucket-block").length - bracket.querySelectorAll(".block-wrapper").length <= 0) {
-                document.querySelector(".bucket-section").style.display = "none";
-                orderSection.style.width = "100%";
-                orderSection.classList.add("order-section-centered");
-            }
-            
-            currentIndex++;
-            
-            updateResultString();
-    
-            removeBtn.addEventListener("click", (e) => {
-                e.stopPropagation(); // Prevent bubbling up to block drag logic
-                bracket.removeChild(blockWrapper);
-                block.style.display = "flex";
-                if (document.querySelectorAll(".bucket-block").length - bracket.querySelectorAll(".block-wrapper").length > 0) {
-                    document.querySelector(".bucket-section").style.display = "flex";
-                }
-                updateResultString();
-            });
-            // Add this to prevent touchstart from triggering drag
-            removeBtn.addEventListener("touchstart", (e) => {
-                e.stopPropagation();
-            });
-    
-            initDrag(blockWrapper);
-        });
-    });
-    
+
     function updateResultString() {
         const items = bracket.querySelectorAll(".block-wrapper .block");
         const numbers = Array.from(items).map((el) => el.dataset.originalNumber);
         raceAssesseesOrder = numbers.join(",");
         console.log("raceAssesseesOrder: ", raceAssesseesOrder);
     }
-    
+
     function getScrollableParent(el) {
         while (el) {
             const style = getComputedStyle(el);
             const overflowY = style.overflowY;
-            if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) {
+            if ((overflowY === "auto" || overflowY === "scroll") && el.scrollHeight > el.clientHeight) {
                 return el;
             }
             el = el.parentElement;
@@ -1923,64 +1931,58 @@ function sprintsOrCrawls(activityName, activityNumber){
         return document.scrollingElement || document.documentElement;
     }
 
-    
     function initDrag(el) {
         let offsetY;
-        
+
         const move = (clientY) => {
             if (!currentClone) return;
             currentClone.style.top = `${clientY - offsetY}px`;
-            
+
             const margin = 80;
             const speed = 6;
-            
-            // AUTO SCROLL - Compatible with mobile
+
             const scrollable = getScrollableParent(initialElement);
             if (clientY < margin) {
                 window.scrollBy(0, -speed);
                 document.documentElement.scrollTop -= speed;
                 document.body.scrollTop -= speed;
                 scrollable.scrollTop -= speed;
-            } 
-            else if (clientY > window.innerHeight - margin) {
+            } else if (clientY > window.innerHeight - margin) {
                 window.scrollBy(0, speed);
                 document.documentElement.scrollTop += speed;
                 document.body.scrollTop += speed;
                 scrollable.scrollTop += speed;
             }
-            
-            const siblings = [
-                ...bracket.querySelectorAll(".block-wrapper:not(.dragging)"),
-            ];
+
+            const siblings = [...bracket.querySelectorAll(".block-wrapper:not(.dragging)")];
             const next = siblings.find((sibling) => {
                 const rect = sibling.getBoundingClientRect();
                 return clientY <= rect.top + rect.height / 2;
             });
-            
+
             if (next) {
                 bracket.insertBefore(el, next);
-            } 
-            else {
+            } else {
                 bracket.appendChild(el);
             }
         };
-    
+
         const endDrag = () => {
             if (currentClone && currentClone.parentNode) currentClone.remove();
             el.classList.remove("dragging");
             currentClone = null;
-            
+
             document.removeEventListener("mousemove", onMouseMove);
             document.removeEventListener("mouseup", onMouseUp);
             document.removeEventListener("touchmove", onTouchMove);
             document.removeEventListener("touchend", onTouchEnd);
-            
+
             updateResultString();
         };
-        
+
         const onMouseMove = (e) => move(e.clientY);
         const onMouseUp = () => endDrag();
-        
+
         const onTouchMove = (e) => {
             if (e.touches.length > 0) {
                 const touch = e.touches[0];
@@ -1988,13 +1990,13 @@ function sprintsOrCrawls(activityName, activityNumber){
                 e.preventDefault();
             }
         };
-        
+
         const onTouchEnd = () => endDrag();
-        
+
         const start = (clientX, clientY) => {
             const rect = el.getBoundingClientRect();
             offsetY = clientY - rect.top;
-            
+
             currentClone = el.cloneNode(true);
             currentClone.classList.add("block-clone-preview");
             currentClone.style.position = "fixed";
@@ -2005,20 +2007,18 @@ function sprintsOrCrawls(activityName, activityNumber){
             currentClone.style.pointerEvents = "none";
             currentClone.style.zIndex = "9999";
             document.body.appendChild(currentClone);
-            
+
             el.classList.add("dragging");
         };
-        
+
         el.addEventListener("mousedown", (e) => {
-            // e.preventDefault(); // <<< This prevents other layout/scroll interference
             start(e.clientX, e.clientY);
             document.addEventListener("mousemove", onMouseMove);
             document.addEventListener("mouseup", onMouseUp);
         });
-        
+
         el.addEventListener("touchstart", (e) => {
             if (e.touches.length > 0) {
-                // e.preventDefault(); // <<< Here too!
                 const touch = e.touches[0];
                 start(touch.clientX, touch.clientY);
                 document.addEventListener("touchmove", onTouchMove, { passive: false });
@@ -2026,23 +2026,158 @@ function sprintsOrCrawls(activityName, activityNumber){
             }
         });
     }
-    
+
+    function addAssesseeToRaceBracket(number) {
+        const block = document.querySelector(`.bucket-block[data-number="${number}"]`);
+        if (!block || block.style.display === "none") return;
+
+        const blockWrapper = document.createElement("div");
+        blockWrapper.className = "block-wrapper";
+        blockWrapper.setAttribute("data-index", currentIndex);
+
+        const blockInner = document.createElement("div");
+        blockInner.className = "block";
+        blockInner.setAttribute("data-original-number", number);
+
+        const numberSpan = document.createElement("span");
+        numberSpan.className = "number";
+        numberSpan.textContent = number;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "remove-button";
+        removeBtn.textContent = "x";
+
+        blockInner.appendChild(numberSpan);
+        blockInner.appendChild(removeBtn);
+        blockWrapper.appendChild(blockInner);
+        bracket.appendChild(blockWrapper);
+        block.style.display = "none";
+
+        if (document.querySelectorAll(".bucket-block").length - bracket.querySelectorAll(".block-wrapper").length <= 0) {
+            document.querySelector(".bucket-section").style.display = "none";
+            orderSection.style.width = "100%";
+            orderSection.classList.add("order-section-centered");
+        }
+
+        currentIndex++;
+
+        updateResultString();
+
+        removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            bracket.removeChild(blockWrapper);
+            block.style.display = "flex";
+            if (document.querySelectorAll(".bucket-block").length - bracket.querySelectorAll(".block-wrapper").length > 0) {
+                document.querySelector(".bucket-section").style.display = "flex";
+            }
+            updateResultString();
+        });
+        removeBtn.addEventListener("touchstart", (e) => {
+            e.stopPropagation();
+        });
+
+        initDrag(blockWrapper);
+    }
+
+    const { topButtonContainer, backButton, resetButton, submitButton } = createGameTopToolbar(initialElement, {
+        onLoadPrevious: async () => {
+            if (activityNumber <= 1) {
+                alert("אין מקצה קודם לטעינה.");
+                return;
+            }
+            showLoading();
+            let order;
+            try {
+                order = await fetchPreviousHeatRaceOrder(currentTeamNumber, activityName, activityNumber - 1);
+            } catch (e) {
+                console.error(e);
+                hideLoading();
+                alert("שגיאה בטעינת נתונים מהשרת.");
+                return;
+            }
+            hideLoading();
+            const allowed = new Set(assesseeNumbers.map(String));
+            const filtered = order.filter((n) => allowed.has(String(n)));
+            if (filtered.length === 0) {
+                alert("לא נמצאו נתוני מיקום במקצה הקודם.");
+                return;
+            }
+            while (bracket.querySelector(".block-wrapper")) {
+                bracket.removeChild(bracket.querySelector(".block-wrapper"));
+            }
+            document.querySelectorAll(".bucket-block").forEach((b) => {
+                b.style.display = "flex";
+            });
+            orderSection.classList.remove("order-section-centered");
+            orderSection.style.width = "";
+            document.querySelector(".bucket-section").style.display = "flex";
+            currentIndex = 0;
+            filtered.forEach((num) => addAssesseeToRaceBracket(num));
+            updateResultString();
+        },
+    });
+
+    const instructionsUI = createActivityInstructionsModal(
+        initialElement,
+        "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון."
+    );
+
+    const gameLayout = document.createElement("div");
+    gameLayout.className = "game-layout";
+    initialElement.appendChild(gameLayout);
+
+    const bucketSection = document.createElement("div");
+    bucketSection.className = "bucket-section";
+    gameLayout.appendChild(bucketSection);
+
+    const bucketTitle = document.createElement("div");
+    bucketTitle.className = "bucket-title";
+    bucketTitle.textContent = "בחר מוערכים";
+    bucketSection.appendChild(bucketTitle);
+
+    const bucketItems = document.createElement("div");
+    bucketItems.className = "bucket-items";
+    bucketSection.appendChild(bucketItems);
+
+    for (let i = 0; i < assesseeNumbers.length; i++) {
+        const block = document.createElement("div");
+        block.className = "bucket-block";
+        block.dataset.number = assesseeNumbers[i];
+        block.textContent = assesseeNumbers[i];
+        bucketItems.appendChild(block);
+    }
+
+    orderSection = document.createElement("div");
+    orderSection.className = "order-section";
+    gameLayout.appendChild(orderSection);
+
+    bracket = document.createElement("div");
+    bracket.className = "bracket";
+    bracket.setAttribute("data-max-capacity", "7");
+    orderSection.appendChild(bracket);
+
+    const bracketTitle = document.createElement("div");
+    bracketTitle.className = "bracket-title";
+    bracketTitle.textContent = "Box Section 1";
+
+    document.querySelectorAll(".bucket-block").forEach((block) => {
+        block.addEventListener("click", () => {
+            addAssesseeToRaceBracket(block.dataset.number);
+        });
+    });
+
     // Back to menu button event handler
     backButton.addEventListener("click", () => {
         // Remove all game content (button container and game layout)
         const buttonContainer = initialElement.querySelector('.top-button-container');
         const gameLayout = initialElement.querySelector('.game-layout');
-        const submitContainer = initialElement.querySelector('.submit-container');
-        const activityNumberBanner = initialElement.querySelector('.activity-number-banner');
         const activityNameDisplay = initialElement.querySelector('.activity-name-banner');
-        const instructionsDiv = initialElement.querySelector('.instructions');
         
+        backButton.remove();
         if (buttonContainer) buttonContainer.remove();
         if (gameLayout) gameLayout.remove();
-        if (submitContainer) submitContainer.remove();
-        if (activityNumberBanner) activityNumberBanner.remove();
         if (activityNameDisplay) activityNameDisplay.remove();
-        if (instructionsDiv) instructionsDiv.remove();
+        instructionsUI.destroy();
 
         // Reset current game
         currentGame = null;
@@ -2143,12 +2278,75 @@ function sprintsOrCrawls(activityName, activityNumber){
         raceAssesseesOrder = null;
         currentIndex = 0;
 
-        const banner = document.querySelector(".activity-number-banner");
+        const banner = document.querySelector(".activity-name-banner");
         if (banner) {
             console.log ("in resetGame, displaying banner with activity number: ", activityNumber);
-            banner.textContent = `מקצה נוכחי: ${activityNumber}`;
+            setActivityTitleBannerContent(banner, activityLabel, activityNumber);
         }
     }
+}
+
+/**
+ * Fetches finish order from get_team_activity_data for one heat (by place ascending).
+ * Prefers activity[heat] (e.g. sprints["11"] → place) over places[heat][0].
+ * redisActivityName: e.g. "sprints", "crawls", "sociometric_stretcher"
+ */
+async function fetchPreviousHeatRaceOrder(teamNumber, redisActivityName, previousHeatNumber) {
+    const heatKey = String(previousHeatNumber);
+    const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            team_number: String(teamNumber),
+            activity_names: redisActivityName,
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(`get_team_activity_data ${response.status}`);
+    }
+    const data = await response.json();
+    if (data && typeof data.error === "string") {
+        throw new Error(data.error);
+    }
+    const tn = String(teamNumber);
+    let teamData = data[tn];
+    if (!teamData && data) {
+        const keys = Object.keys(data);
+        const match = keys.find((k) => String(k) === tn);
+        if (match != null) teamData = data[match];
+    }
+    if (!teamData || typeof teamData !== "object") {
+        return [];
+    }
+    const entries = [];
+    for (const assesseeNum of Object.keys(teamData)) {
+        const act = teamData[assesseeNum]?.[redisActivityName];
+        if (!act || typeof act !== "object") continue;
+
+        let place = null;
+        const direct =
+            act[heatKey] !== undefined && act[heatKey] !== null
+                ? act[heatKey]
+                : act[previousHeatNumber];
+        if (direct !== undefined && direct !== null && typeof direct !== "object") {
+            const p = Number(direct);
+            if (Number.isFinite(p)) place = p;
+        }
+        if (place == null) {
+            const places = act.places;
+            if (places && typeof places === "object") {
+                const arr = places[heatKey] ?? places[previousHeatNumber];
+                if (Array.isArray(arr) && arr.length >= 1) {
+                    const p = Number(arr[0]);
+                    if (Number.isFinite(p)) place = p;
+                }
+            }
+        }
+        if (place == null) continue;
+        entries.push({ num: String(assesseeNum), place });
+    }
+    entries.sort((a, b) => a.place - b.place || a.num.localeCompare(b.num, undefined, { numeric: true }));
+    return entries.map((e) => e.num);
 }
 
 async function submitActivity(currentTeamNumber, currentTeamID, activityName, activityNumber, resultString){

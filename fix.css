@@ -446,7 +446,7 @@ margin: 0 auto;
 padding: 5px;
 direction: rtl;
 overflow: visible;
-padding-top: 20px; /* Space for fixed reset button */
+padding-top: 10px;
 align-items: stretch; /* Make all children the same height */
 }
 
@@ -456,6 +456,181 @@ display: flex;
 gap: 10px;
 margin-bottom: 10px;
 width: 100%;
+}
+
+/* Game toolbar (fix grades resubmit + parity with main app) */
+.top-button-container.game-top-toolbar {
+  align-items: stretch;
+  box-sizing: border-box;
+}
+
+.tb-main-content {
+  position: relative;
+}
+
+.tb-main-content > .back-button.game-toolbar-back {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  margin: 0;
+  z-index: 20;
+}
+
+.help-button.game-toolbar-help {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 700;
+  width: 60px;
+  line-height: 1;
+  font-family: inherit;
+}
+
+.help-button.game-toolbar-help:hover {
+  background-color: #1976D2;
+}
+
+.tb-main-content > .help-button.game-toolbar-help {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  margin: 0;
+  z-index: 20;
+}
+
+.help-button.game-toolbar-help.game-toolbar-help--in-parent {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 20;
+}
+
+.activity-instructions-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.activity-instructions-modal.is-open {
+  display: flex;
+}
+
+.activity-instructions-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.activity-instructions-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 440px;
+  max-height: min(75vh, 520px);
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22);
+  padding: 22px 22px 18px;
+  direction: rtl;
+  text-align: right;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.activity-instructions-modal__title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #265728;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  padding-inline-end: 40px;
+  border-bottom: 1px solid #e8ebe8;
+}
+
+.activity-instructions-modal__dismiss {
+  position: absolute;
+  top: 10px;
+  inset-inline-end: 10px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #5a5a5a;
+  font-size: 1.75rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  font-family: system-ui, sans-serif;
+}
+
+.activity-instructions-modal__dismiss:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: #222;
+}
+
+.activity-instructions-modal__body {
+  font-size: 1.2rem;
+  line-height: 1.55;
+  color: #444;
+  font-weight: 600;
+  white-space: pre-wrap;
+}
+
+.top-button-container.game-top-toolbar > .back-button.game-toolbar-back {
+  margin-inline-start: auto;
+}
+
+.top-button-container.game-top-toolbar .top-button-actions {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  direction: rtl;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.top-button-container.game-top-toolbar .submit-button.submit-button--toolbar,
+.top-button-container.game-top-toolbar .reset-button,
+.top-button-container.game-top-toolbar .load-previous-arrangement-button {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+
+.load-previous-arrangement-button {
+  padding: 10px 12px;
+  background-color: #6586ff;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 15px;
+  text-align: center;
+  direction: rtl;
+}
+
+.load-previous-arrangement-button:hover {
+  background-color: #e3f2fd;
 }
 
 /* Back Button */
@@ -701,6 +876,10 @@ box-sizing: border-box;
   width: 100%;
   text-align: center;
   direction: rtl;
+}
+
+.top-button-container.game-top-toolbar .submit-button.submit-button--toolbar {
+  width: auto;
 }
 
 .block-wrapper.replace-target {
@@ -1061,6 +1240,18 @@ body {
   text-align: center;
   margin: 10px 0 5px 0;
   color: #265728;
+}
+
+.activity-name-banner .activity-title-name {
+  font-size: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+
+.activity-name-banner .activity-heat-suffix {
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #3d523f;
 }
 
 .activity-number-banner {

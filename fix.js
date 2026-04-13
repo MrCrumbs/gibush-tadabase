@@ -438,11 +438,180 @@ function showDeleteSuccessToast() {
     }, 2000);
 }
 
+/** Top bar: שליחה, optional סדר קודם, איפוס (RTL); back top-right on .tb-main-content */
+function createGameTopToolbar(parent, options) {
+    options = options || {};
+    const includeLoadPrevious = options.includeLoadPrevious !== false;
+
+    const topButtonContainer = document.createElement("div");
+    topButtonContainer.className = "top-button-container game-top-toolbar";
+    parent.appendChild(topButtonContainer);
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "top-button-actions";
+    topButtonContainer.appendChild(actionsRow);
+
+    const submitButton = document.createElement("button");
+    submitButton.className = "submit-button submit-button--toolbar";
+    submitButton.type = "button";
+    submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
+    actionsRow.appendChild(submitButton);
+
+    let loadPreviousButton = null;
+    if (includeLoadPrevious) {
+        loadPreviousButton = document.createElement("button");
+        loadPreviousButton.className = "load-previous-arrangement-button";
+        loadPreviousButton.type = "button";
+        loadPreviousButton.innerHTML = '<i class="fas fa-clone"></i> סדר קודם';
+        actionsRow.appendChild(loadPreviousButton);
+        loadPreviousButton.addEventListener("click", () => {
+            alert("פיצ'ר בבנייה");
+        });
+    }
+
+    const resetButton = document.createElement("button");
+    resetButton.className = "reset-button";
+    resetButton.type = "button";
+    resetButton.innerHTML = '<i class="fas fa-undo"></i> איפוס';
+    actionsRow.appendChild(resetButton);
+
+    const backButton = document.createElement("button");
+    backButton.className = "back-button game-toolbar-back";
+    backButton.type = "button";
+    backButton.innerHTML = '<i class="fas fa-arrow-right"></i>';
+    let mainContent = parent.closest(".tb-main-content");
+    if (!mainContent) {
+        mainContent = parent.querySelector(".tb-main-content");
+    }
+    if (mainContent) {
+        mainContent.appendChild(backButton);
+    } else {
+        topButtonContainer.appendChild(backButton);
+    }
+
+    return {
+        topButtonContainer,
+        actionsRow,
+        backButton,
+        resetButton,
+        loadPreviousButton,
+        submitButton,
+    };
+}
+
+function setActivityTitleBannerContent(bannerEl, activityLabel, heatNumber) {
+    bannerEl.replaceChildren();
+    const namePart = document.createElement("span");
+    namePart.className = "activity-title-name";
+    namePart.textContent = activityLabel;
+    const heatPart = document.createElement("span");
+    heatPart.className = "activity-heat-suffix";
+    heatPart.textContent = ` (מקצה ${heatNumber})`;
+    bannerEl.appendChild(namePart);
+    bannerEl.appendChild(heatPart);
+}
+
+function createActivityInstructionsModal(parent, instructionText) {
+    let mainContent = parent.closest(".tb-main-content");
+    if (!mainContent) {
+        mainContent = parent.querySelector(".tb-main-content");
+    }
+
+    const helpButton = document.createElement("button");
+    helpButton.type = "button";
+    helpButton.className = "help-button game-toolbar-help";
+    helpButton.setAttribute("aria-label", "הוראות");
+    helpButton.textContent = "?";
+
+    let parentPositionRestore = null;
+    if (mainContent) {
+        mainContent.appendChild(helpButton);
+    } else {
+        const prev = parent.style.position;
+        if (!prev || prev === "static") {
+            parent.style.position = "relative";
+            parentPositionRestore = prev || "";
+        }
+        helpButton.classList.add("game-toolbar-help--in-parent");
+        parent.appendChild(helpButton);
+    }
+
+    const modalRoot = document.createElement("div");
+    modalRoot.className = "activity-instructions-modal";
+    modalRoot.setAttribute("role", "dialog");
+    modalRoot.setAttribute("aria-modal", "true");
+    modalRoot.setAttribute("aria-hidden", "true");
+
+    const backdrop = document.createElement("div");
+    backdrop.className = "activity-instructions-modal__backdrop";
+
+    const panel = document.createElement("div");
+    panel.className = "activity-instructions-modal__panel";
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "activity-instructions-modal__title";
+    titleEl.textContent = "הוראות";
+
+    const bodyEl = document.createElement("div");
+    bodyEl.className = "activity-instructions-modal__body";
+    bodyEl.textContent = instructionText;
+
+    const dismissBtn = document.createElement("button");
+    dismissBtn.type = "button";
+    dismissBtn.className = "activity-instructions-modal__dismiss";
+    dismissBtn.setAttribute("aria-label", "סגור");
+    dismissBtn.textContent = "\u00D7";
+
+    panel.appendChild(dismissBtn);
+    panel.appendChild(titleEl);
+    panel.appendChild(bodyEl);
+    modalRoot.appendChild(backdrop);
+    modalRoot.appendChild(panel);
+    document.body.appendChild(modalRoot);
+
+    function onKeyDown(e) {
+        if (e.key === "Escape") {
+            closeModal();
+        }
+    }
+
+    function openModal() {
+        modalRoot.classList.add("is-open");
+        modalRoot.setAttribute("aria-hidden", "false");
+        document.addEventListener("keydown", onKeyDown);
+    }
+
+    function closeModal() {
+        modalRoot.classList.remove("is-open");
+        modalRoot.setAttribute("aria-hidden", "true");
+        document.removeEventListener("keydown", onKeyDown);
+    }
+
+    helpButton.addEventListener("click", openModal);
+    backdrop.addEventListener("click", closeModal);
+    dismissBtn.addEventListener("click", closeModal);
+
+    function destroy() {
+        closeModal();
+        helpButton.remove();
+        modalRoot.remove();
+        document.removeEventListener("keydown", onKeyDown);
+        if (parentPositionRestore !== null) {
+            parent.style.position = parentPositionRestore;
+        }
+    }
+
+    return { helpButton, modalRoot, destroy };
+}
+
 function holesResubmit(activityNumber){
-    // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHebTranslations["holes"];
+    setActivityTitleBannerContent(
+        activityNameDisplay,
+        engToHebTranslations["holes"],
+        activityNumber
+    );
     initialElementFixGrades.appendChild(activityNameDisplay);
     
     // Create button container for both reset and back to menu buttons
@@ -461,6 +630,11 @@ function holesResubmit(activityNumber){
     resetButton.className = "reset-button";
     resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
     topButtonContainer.appendChild(resetButton);
+    
+    const instructionsUI = createActivityInstructionsModal(
+        initialElementFixGrades,
+        "דרג כל מוערך בכל תחום מ־1 (נמוך) עד 6 (גבוה)."
+    );
     
     // Create main container
     const holesContainer = document.createElement("div");
@@ -649,6 +823,7 @@ function holesResubmit(activityNumber){
         submitContainer.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
+        instructionsUI.destroy();
 
         // Go back to activities list
         goBackToActivitiesList();
@@ -694,6 +869,7 @@ function holesResubmit(activityNumber){
                 submitContainer.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
+                instructionsUI.destroy();
                 
                 // Go back to activities list
                 goBackToActivitiesList();
@@ -708,34 +884,22 @@ function holesResubmit(activityNumber){
 }
 
 function sacksResubmit(activityNumber){
-    // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHebTranslations["sacks"];
+    setActivityTitleBannerContent(
+        activityNameDisplay,
+        engToHebTranslations["sacks"],
+        activityNumber
+    );
     initialElementFixGrades.appendChild(activityNameDisplay);
     
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElementFixGrades.appendChild(topButtonContainer);
+    const { topButtonContainer, backButton, resetButton, submitButton } =
+        createGameTopToolbar(initialElementFixGrades, { includeLoadPrevious: false });
     
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
-    // Create instructions div
-    const instructionsDiv = document.createElement("div");
-    instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "לחיצה על הכדור מוסיפה הקפה. לחיצה ארוכה להורדת הקפות.";
-    initialElementFixGrades.appendChild(instructionsDiv);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElementFixGrades,
+        "לחיצה על הכדור מוסיפה הקפה. לחיצה ארוכה להורדת הקפות."
+    );
     
     // Undo button (cancel last action)
     const actionStack = [];
@@ -866,23 +1030,14 @@ function sacksResubmit(activityNumber){
         assesseesGrid.appendChild(assesseeCard);
     });
     
-    // Create submit container
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElementFixGrades.appendChild(submitContainer);
-    
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
         sacksContainer.remove();
-        submitContainer.remove();
+        backButton.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
-        instructionsDiv.remove();
+        instructionsUI.destroy();
         undoButton.remove();
         
         // Go back to activities list
@@ -940,10 +1095,10 @@ function sacksResubmit(activityNumber){
             setTimeout(() => {
                 // Remove all created elements after initialElement
                 sacksContainer.remove();
-                submitContainer.remove();
+                backButton.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
-                instructionsDiv.remove();
+                instructionsUI.destroy();
                 undoButton.remove();
                 
                 // Go back to activities list
@@ -984,40 +1139,19 @@ function sacksResubmit(activityNumber){
 }
 
 function stretcherResubmit(activityNumber){
-    // Create and display the activity name banner
+    const activityLabel = engToHebTranslations["stretcher"];
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHebTranslations["stretcher"];
+    setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElementFixGrades.appendChild(activityNameDisplay);
     
-    // Create and display the activity number banner
-    const activityNumberDisplay = document.createElement("div");
-    activityNumberDisplay.className = "activity-number-banner";
-    activityNumberDisplay.textContent = `מקצה נוכחי: ${activityNumber}`;
-    initialElementFixGrades.appendChild(activityNumberDisplay);
+    const { topButtonContainer, backButton, resetButton, submitButton } =
+        createGameTopToolbar(initialElementFixGrades);
     
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElementFixGrades.appendChild(topButtonContainer);
-    
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
-    // Create instructions div
-    const instructionsDiv = document.createElement("div");
-    instructionsDiv.className = "instructions";
-    instructionsDiv.textContent = "לחיצה על הכדור מוסיפה נקודה. לחיצה ארוכה להורדת נקודות.";
-    initialElementFixGrades.appendChild(instructionsDiv);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElementFixGrades,
+        "לחיצה על הכדור מוסיפה נקודה. לחיצה ארוכה להורדת נקודות."
+    );
     
     // Undo button (cancel last action)
     const actionStack = [];
@@ -1148,24 +1282,14 @@ function stretcherResubmit(activityNumber){
         assesseesGrid.appendChild(assesseeCard);
     });
     
-    // Create submit container
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElementFixGrades.appendChild(submitContainer);
-    
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
         stretcherContainer.remove();
-        submitContainer.remove();
+        backButton.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
-        activityNumberDisplay.remove();
-        instructionsDiv.remove();
+        instructionsUI.destroy();
         undoButton.remove();
         
         // Go back to activities list
@@ -1223,11 +1347,10 @@ function stretcherResubmit(activityNumber){
             setTimeout(() => {
                 // Remove all created elements after initialElement
                 stretcherContainer.remove();
-                submitContainer.remove();
+                backButton.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
-                activityNumberDisplay.remove();
-                instructionsDiv.remove();
+                instructionsUI.destroy();
                 undoButton.remove();
                 
                 // Go back to activities list
@@ -1268,46 +1391,23 @@ function stretcherResubmit(activityNumber){
 }
 
 function sociometricStretcherResubmit(activityNumber){
-    // Create and display the activity name banner
+    const activityLabel = engToHebTranslations["sociometric_stretcher"];
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHebTranslations["sociometric_stretcher"];
+    setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElementFixGrades.appendChild(activityNameDisplay);
     
-    // Create and display the activity number banner
-    const activityNumberDisplay = document.createElement("div");
-    activityNumberDisplay.className = "activity-number-banner";
-    activityNumberDisplay.textContent = `מקצה נוכחי: ${activityNumber}`;
-    initialElementFixGrades.appendChild(activityNumberDisplay);
+    const { topButtonContainer, backButton, resetButton, submitButton } =
+        createGameTopToolbar(initialElementFixGrades);
     
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElementFixGrades.appendChild(topButtonContainer);
-    
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElementFixGrades,
+        "גררו כל מוערך לריבוע לפי המשימה שביצע."
+    );
 
     const gameLayout = document.createElement("div");
     gameLayout.className = "stretcher-game-layout";
     initialElementFixGrades.appendChild(gameLayout);
-    
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElementFixGrades.appendChild(submitContainer);
     
     const bucketSection = document.createElement("div");
     bucketSection.className = "stretcher-bucket-section";
@@ -1756,20 +1856,16 @@ function sociometricStretcherResubmit(activityNumber){
     }
     // Back to menu button event handler
     backButton.addEventListener("click", () => {
-        // Remove all game content (button container and game layout)
         const buttonContainer = initialElementFixGrades.querySelector('.top-button-container');
-        const gameLayout = initialElementFixGrades.querySelector('.stretcher-game-layout');
-        const submitContainer = initialElementFixGrades.querySelector('.submit-container');
-        const activityNumberBanner = initialElementFixGrades.querySelector('.activity-number-banner');
-        const activityNameDisplay = initialElementFixGrades.querySelector('.activity-name-banner');
+        const gameLayoutEl = initialElementFixGrades.querySelector('.stretcher-game-layout');
+        const activityNameDisplayEl = initialElementFixGrades.querySelector('.activity-name-banner');
 
+        backButton.remove();
         if (buttonContainer) buttonContainer.remove();
-        if (gameLayout) gameLayout.remove();
-        if (submitContainer) submitContainer.remove();
-        if (activityNumberBanner) activityNumberBanner.remove();
-        if (activityNameDisplay) activityNameDisplay.remove();
+        if (gameLayoutEl) gameLayoutEl.remove();
+        if (activityNameDisplayEl) activityNameDisplayEl.remove();
+        instructionsUI.destroy();
 
-        // Go back to activities list
         goBackToActivitiesList();
     });
 
@@ -1823,20 +1919,16 @@ function sociometricStretcherResubmit(activityNumber){
                 
                 // Wait 2 seconds before going back to activities list
                 setTimeout(() => {
-                                    // Remove all game content
                 const buttonContainer = initialElementFixGrades.querySelector('.top-button-container');
-                const gameLayout = initialElementFixGrades.querySelector('.stretcher-game-layout');
-                const submitContainer = initialElementFixGrades.querySelector('.submit-container');
-                const activityNumberBanner = initialElementFixGrades.querySelector('.activity-number-banner');
-                const activityNameDisplay = initialElementFixGrades.querySelector('.activity-name-banner');
+                const gameLayoutEl = initialElementFixGrades.querySelector('.stretcher-game-layout');
+                const activityNameDisplayEl = initialElementFixGrades.querySelector('.activity-name-banner');
 
+                backButton.remove();
                 if (buttonContainer) buttonContainer.remove();
-                if (gameLayout) gameLayout.remove();
-                if (submitContainer) submitContainer.remove();
-                if (activityNumberBanner) activityNumberBanner.remove();
-                if (activityNameDisplay) activityNameDisplay.remove();
+                if (gameLayoutEl) gameLayoutEl.remove();
+                if (activityNameDisplayEl) activityNameDisplayEl.remove();
+                instructionsUI.destroy();
 
-                    // Go back to activities list
                     goBackToActivitiesList();
                 }, 2000);
             } else {
@@ -1890,10 +1982,10 @@ function sociometricStretcherResubmit(activityNumber){
             block.style.display = "flex";
         });
 
-        const banner = document.querySelector(".activity-number-banner");
+        const banner = document.querySelector(".activity-name-banner");
         if (banner) {
             console.log ("in resetGame, displaying banner with activity number: ", activityNumber);
-            banner.textContent = `מקצה נוכחי: ${activityNumber}`;
+            setActivityTitleBannerContent(banner, activityLabel, activityNumber);
         }
         
         updateUI();
@@ -1901,46 +1993,23 @@ function sociometricStretcherResubmit(activityNumber){
 }
 
 function sprintsOrCrawlsResubmit(activityName, activityNumber){
-    // Create and display the activity name banner
+    const activityLabel = engToHebTranslations[activityName] || activityName;
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHebTranslations[activityName] || activityName;
+    setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElementFixGrades.appendChild(activityNameDisplay);
-    
-    // Create and display the activity number banner
-    const activityNumberDisplay = document.createElement("div");
-    activityNumberDisplay.className = "activity-number-banner";
-    activityNumberDisplay.textContent = `מקצה נוכחי: ${activityNumber}`;
-    initialElementFixGrades.appendChild(activityNumberDisplay);
 
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElementFixGrades.appendChild(topButtonContainer);
+    const { topButtonContainer, backButton, resetButton, submitButton } =
+        createGameTopToolbar(initialElementFixGrades);
     
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
+    const instructionsUI = createActivityInstructionsModal(
+        initialElementFixGrades,
+        "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון."
+    );
     
     const gameLayout = document.createElement("div");
     gameLayout.className = "game-layout";
     initialElementFixGrades.appendChild(gameLayout);
-    
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElementFixGrades.appendChild(submitContainer);
     
     const bucketSection = document.createElement("div");
     bucketSection.className = "bucket-section";
@@ -2159,20 +2228,16 @@ function sprintsOrCrawlsResubmit(activityName, activityNumber){
     
     // Back to menu button event handler
     backButton.addEventListener("click", () => {
-        // Remove all game content (button container and game layout)
         const buttonContainer = initialElementFixGrades.querySelector('.top-button-container');
-        const gameLayout = initialElementFixGrades.querySelector('.game-layout');
-        const submitContainer = initialElementFixGrades.querySelector('.submit-container');
-        const activityNumberBanner = initialElementFixGrades.querySelector('.activity-number-banner');
-        const activityNameDisplay = initialElementFixGrades.querySelector('.activity-name-banner');
+        const gameLayoutEl = initialElementFixGrades.querySelector('.game-layout');
+        const activityNameDisplayEl = initialElementFixGrades.querySelector('.activity-name-banner');
         
+        backButton.remove();
         if (buttonContainer) buttonContainer.remove();
-        if (gameLayout) gameLayout.remove();
-        if (submitContainer) submitContainer.remove();
-        if (activityNumberBanner) activityNumberBanner.remove();
-        if (activityNameDisplay) activityNameDisplay.remove();
+        if (gameLayoutEl) gameLayoutEl.remove();
+        if (activityNameDisplayEl) activityNameDisplayEl.remove();
+        instructionsUI.destroy();
         
-        // Go back to activities list
         goBackToActivitiesList();
     });
     
@@ -2241,20 +2306,16 @@ function sprintsOrCrawlsResubmit(activityName, activityNumber){
             
             // Wait 2 seconds before going back to activities list
             setTimeout(() => {
-                // Remove all game content
                 const buttonContainer = initialElementFixGrades.querySelector('.top-button-container');
-                const gameLayout = initialElementFixGrades.querySelector('.game-layout');
-                const submitContainer = initialElementFixGrades.querySelector('.submit-container');
-                const activityNumberBanner = initialElementFixGrades.querySelector('.activity-number-banner');
-                const activityNameDisplay = initialElementFixGrades.querySelector('.activity-name-banner');
+                const gameLayoutEl = initialElementFixGrades.querySelector('.game-layout');
+                const activityNameDisplayEl = initialElementFixGrades.querySelector('.activity-name-banner');
                 
+                backButton.remove();
                 if (buttonContainer) buttonContainer.remove();
-                if (gameLayout) gameLayout.remove();
-                if (submitContainer) submitContainer.remove();
-                if (activityNumberBanner) activityNumberBanner.remove();
-                if (activityNameDisplay) activityNameDisplay.remove();
+                if (gameLayoutEl) gameLayoutEl.remove();
+                if (activityNameDisplayEl) activityNameDisplayEl.remove();
+                instructionsUI.destroy();
                 
-                // Go back to activities list
                 goBackToActivitiesList();
             }, 2000);
         } else {
@@ -2283,10 +2344,10 @@ function sprintsOrCrawlsResubmit(activityName, activityNumber){
         raceAssesseesOrder = null;
         currentIndex = 0;
 
-        const banner = document.querySelector(".activity-number-banner");
+        const banner = document.querySelector(".activity-name-banner");
         if (banner) {
             console.log ("in resetGame, displaying banner with activity number: ", activityNumber);
-            banner.textContent = `מקצה נוכחי: ${activityNumber}`;
+            setActivityTitleBannerContent(banner, activityLabel, activityNumber);
         }
     }
 }
