@@ -607,30 +607,14 @@ function createActivityInstructionsModal(parent, instructionText) {
 function holesResubmit(activityNumber){
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    setActivityTitleBannerContent(
-        activityNameDisplay,
-        engToHebTranslations["holes"],
-        activityNumber
-    );
+    activityNameDisplay.textContent = engToHebTranslations["holes"];
     initialElementFixGrades.appendChild(activityNameDisplay);
-    
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElementFixGrades.appendChild(topButtonContainer);
-    
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
+
+    const { topButtonContainer, backButton, resetButton, submitButton } = createGameTopToolbar(
+        initialElementFixGrades,
+        { includeLoadPrevious: false }
+    );
+
     const instructionsUI = createActivityInstructionsModal(
         initialElementFixGrades,
         "דרג כל מוערך בכל תחום מ־1 (נמוך) עד 6 (גבוה)."
@@ -687,15 +671,6 @@ function holesResubmit(activityNumber){
         
         assesseesList.appendChild(assesseeRow);
     });
-    
-    // Create submit container
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElementFixGrades.appendChild(submitContainer);
     
     // Helper function to create input group with plus/minus buttons
     function createInputGroup(label, fieldName, assesseeNumber, data) {
@@ -816,16 +791,13 @@ function holesResubmit(activityNumber){
         return isValid;
     }
     
-    // Back button event
     backButton.addEventListener("click", () => {
-        // Remove all created elements after initialElement
         holesContainer.remove();
-        submitContainer.remove();
+        backButton.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
         instructionsUI.destroy();
 
-        // Go back to activities list
         goBackToActivitiesList();
     });
     
@@ -859,25 +831,23 @@ function holesResubmit(activityNumber){
             // Show success toast
             showResubmitSuccessToast();
             
-            // Clear localStorage after successful submission
             localStorage.removeItem("holesData");
-            
-            // Wait 2 seconds before going back to activities list
+
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
+
             setTimeout(() => {
-                // Remove all created elements after initialElement
                 holesContainer.remove();
-                submitContainer.remove();
+                backButton.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
                 instructionsUI.destroy();
-                
-                // Go back to activities list
+
                 goBackToActivitiesList();
             }, 2000);
         } else {
-            // Reset button state on failure
             submitButton.disabled = false;
-            submitButton.textContent = "שליחה";
+            submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
             alert("שגיאה בשליחת נתונים לשרת. נא לנסות שנית.");
         }
     });
@@ -886,11 +856,7 @@ function holesResubmit(activityNumber){
 function sacksResubmit(activityNumber){
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    setActivityTitleBannerContent(
-        activityNameDisplay,
-        engToHebTranslations["sacks"],
-        activityNumber
-    );
+    activityNameDisplay.textContent = engToHebTranslations["sacks"];
     initialElementFixGrades.appendChild(activityNameDisplay);
     
     const { topButtonContainer, backButton, resetButton, submitButton } =
@@ -1487,7 +1453,8 @@ function sociometricStretcherResubmit(activityNumber){
     }
     
     const brackets = [];
-    const limits = (assesseeNumbersFixGrades.length > 19) ? [8, 2, 4] : [4, 2, 4];
+    //const limits = (assesseeNumbersFixGrades.length > 19) ? [8, 2, 4] : [4, 2, 4];
+    const limits = [4, 2, 4];
     const limitTitles = ["לקחו אלונקה", "לקחו ג'ריקן", "מקום ראשון"];
     
     for (let i = 0; i < limits.length; i++) {

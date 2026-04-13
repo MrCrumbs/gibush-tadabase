@@ -43,10 +43,10 @@ TB.render("component_9", async function (data) {
             sprintsOrCrawls("crawls", nextActivityNumber);
             break;
         case "sacks":
-            sacks();
+            await sacks();
             break;
         case "holes":
-            holes();
+            await holes();
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
@@ -169,7 +169,7 @@ function displayMenu(){
         btn.innerHTML = `<span class="game-icon">${game.icon}</span><span class="game-title">${game.title}</span>`;
         // Add onclick handler per game
         btn.addEventListener("click", function () {
-            runGame(game.translatedTitle);
+            void runGame(game.translatedTitle);
         });
         menuContainer.appendChild(btn);
     });
@@ -178,7 +178,7 @@ function displayMenu(){
     initialElement.parentNode.insertBefore(menuContainer, initialElement.nextSibling);
 }
 
-function runGame(gameTitle) {
+async function runGame(gameTitle) {
     // Remove existing game/menu content after initialElement
     const existing = initialElement.nextSibling;
     if (existing) existing.remove();
@@ -196,10 +196,10 @@ function runGame(gameTitle) {
             sprintsOrCrawls("crawls", nextActivityNumber);
             break;
         case "sacks":
-            sacks();
+            await sacks();
             break;
         case "holes":
-            holes();
+            await holes();
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
@@ -389,42 +389,168 @@ function createActivityInstructionsModal(parent, instructionText) {
     return { helpButton, modalRoot, destroy };
 }
 
-function holes(){
-    // Check if holes activity has already been submitted
+function getTeamDataFromActivityResponse(activityData) {
+    if (!activityData || typeof activityData !== "object" || typeof activityData.error === "string") {
+        return null;
+    }
+    const tn = String(currentTeamNumber);
+    if (activityData[tn]) return activityData[tn];
+    const n = Number(tn);
+    if (activityData[n] != null) return activityData[n];
+    for (const k of Object.keys(activityData)) {
+        if (String(k) === tn) return activityData[k];
+    }
+    return null;
+}
+
+/** Local holes draft matches a full submitted heat (all assessees, scores 1–6). */
+function isHolesLocalRestoreUsable(holesData) {
+    if (!holesData || typeof holesData !== "object" || assesseeNumbers.length === 0) return false;
+    for (const num of assesseeNumbers) {
+        const row = holesData[num];
+        if (!row) return false;
+        const t = parseInt(row.teamwork, 10);
+        const d = parseInt(row.determination, 10);
+        if (!Number.isFinite(t) || !Number.isFinite(d) || t < 1 || t > 6 || d < 1 || d > 6) return false;
+    }
+    return true;
+}
+
+function isSacksLocalRestoreUsable(sacksData) {
+    if (!sacksData || typeof sacksData !== "object") return false;
+    for (const k of Object.keys(sacksData)) {
+        const v = parseInt(sacksData[k], 10);
+        if (Number.isFinite(v) && v > 0) return true;
+    }
+    return false;
+}
+
+async function fetchHolesSubmittedDataFromServer(heatNumber) {
+    const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            team_number: String(currentTeamNumber),
+            activity_names: "holes",
+        }),
+    });
+    if (!response.ok) throw new Error("get_team_activity_data failed");
+    const data = await response.json();
+    if (data && typeof data.error === "string") throw new Error(data.error);
+    const teamData = getTeamDataFromActivityResponse(data);
+    if (!teamData) return {};
+    const heatKey = String(heatNumber);
+    const out = {};
+    for (const assesseeNum of Object.keys(teamData)) {
+        const holes = teamData[assesseeNum]?.holes;
+        if (!holes || typeof holes !== "object") continue;
+        const heat = holes[heatKey] !== undefined && holes[heatKey] !== null ? holes[heatKey] : holes[heatNumber];
+        if (!heat || typeof heat !== "object") continue;
+        if (heat.teamwork == null || heat.determination == null) continue;
+        out[assesseeNum] = {
+            teamwork: String(heat.teamwork),
+            determination: String(heat.determination),
+        };
+    }
+    return out;
+}
+
+async function fetchSacksSubmittedDataFromServer(heatNumber) {
+    const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            team_number: String(currentTeamNumber),
+            activity_names: "sacks",
+        }),
+    });
+    if (!response.ok) throw new Error("get_team_activity_data failed");
+    const data = await response.json();
+    if (data && typeof data.error === "string") throw new Error(data.error);
+    const teamData = getTeamDataFromActivityResponse(data);
+    if (!teamData) return {};
+    const heatKey = String(heatNumber);
+    const out = {};
+    for (const assesseeNum of Object.keys(teamData)) {
+        const sacks = teamData[assesseeNum]?.sacks;
+        if (!sacks || typeof sacks !== "object") continue;
+        const heat =
+            sacks[heatKey] !== undefined && sacks[heatKey] !== null ? sacks[heatKey] : sacks[heatNumber];
+        if (heat === undefined || heat === null || typeof heat === "object") continue;
+        const n = parseInt(heat, 10);
+        if (Number.isFinite(n)) out[assesseeNum] = n;
+    }
+    return out;
+}
+
+async function resubmitActivity(currentTeamNumberArg, currentTeamIDArg, activityName, activityNumber, resultString) {
+    try {
+        const response = await fetch("https://misc-ten.vercel.app/resubmit_activity", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                team_number: currentTeamNumberArg,
+                team_id: currentTeamIDArg,
+                activity_name: activityName,
+                activity_number: activityNumber,
+                results: resultString,
+            }),
+        });
+        if (!response.ok) {
+            console.error("Server returned an error:", response.status);
+            return false;
+        }
+        const respData = await response.json();
+        console.log("resubmitActivity response:", respData);
+        return respData.success === true;
+    } catch (error) {
+        console.error("resubmitActivity fetch error:", error);
+        return false;
+    }
+}
+
+async function holes(){
     const gameState = JSON.parse(localStorage.getItem("gameState") || "{}");
     const holesActivities = gameState["holes"] || [];
-    
+    let holesResubmitHeat = null;
+
     if (holesActivities.length > 0) {
-        // Activity has already been submitted
-        alert("מקצה זה כבר הוגש. לתיקון המקצה, עבור לעמוד תיקון תרגילים בתפריט.");
-        currentGame = null;
-        displayMenu();
-        return;
+        if (!confirm("מקצה זה כבר הוגש. האם ברצונך לתקנו?")) {
+            currentGame = null;
+            displayMenu();
+            return;
+        }
+        holesResubmitHeat = Math.max(...holesActivities.map(Number));
+        const fromLocal = JSON.parse(localStorage.getItem("holesData") || "{}");
+        if (!isHolesLocalRestoreUsable(fromLocal)) {
+            showLoading();
+            let fetched = {};
+            try {
+                fetched = await fetchHolesSubmittedDataFromServer(holesResubmitHeat);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                hideLoading();
+            }
+            if (Object.keys(fetched).length === 0) {
+                alert("לא ניתן לטעון את נתוני המקצה מהשרת.");
+                currentGame = null;
+                displayMenu();
+                return;
+            }
+            localStorage.setItem("holesData", JSON.stringify(fetched));
+        }
     }
 
-    // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
     activityNameDisplay.textContent = engToHeb["holes"];
     initialElement.appendChild(activityNameDisplay);
-    
-    // Create button container for both reset and back to menu buttons
-    const topButtonContainer = document.createElement("div");
-    topButtonContainer.className = "top-button-container";
-    initialElement.appendChild(topButtonContainer);
-    
-    // Create back to menu button
-    const backButton = document.createElement("button");
-    backButton.className = "back-button";
-    backButton.innerHTML = '<i class="fas fa-arrow-left"></i>';
-    topButtonContainer.appendChild(backButton);
-    
-    // Create reset button
-    const resetButton = document.createElement("button");
-    resetButton.className = "reset-button";
-    resetButton.innerHTML = '<i class="fas fa-trash" style="margin-right: 5px;"></i> איפוס';
-    topButtonContainer.appendChild(resetButton);
-    
+
+    const { topButtonContainer, backButton, resetButton, submitButton } = createGameTopToolbar(initialElement, {
+        includeLoadPrevious: false,
+    });
+
     const instructionsUI = createActivityInstructionsModal(
         initialElement,
         "דרג כל מוערך בכל תחום מ־1 (נמוך) עד 6 (גבוה)."
@@ -481,15 +607,6 @@ function holes(){
         
         assesseesList.appendChild(assesseeRow);
     });
-    
-    // Create submit container
-    const submitContainer = document.createElement("div");
-    submitContainer.className = "submit-container";
-    const submitButton = document.createElement("button");
-    submitButton.className = "submit-button";
-    submitButton.textContent = "שליחה";
-    submitContainer.appendChild(submitButton);
-    initialElement.appendChild(submitContainer);
     
     // Helper function to create input group with plus/minus buttons
     function createInputGroup(label, fieldName, assesseeNumber, data) {
@@ -610,19 +727,14 @@ function holes(){
         return isValid;
     }
     
-    // Back button event
     backButton.addEventListener("click", () => {
-        // Remove all created elements after initialElement
         holesContainer.remove();
-        submitContainer.remove();
+        backButton.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
         instructionsUI.destroy();
 
-        // Reset current game
         currentGame = null;
-        
-        // Display main menu
         displayMenu();
     });
     
@@ -646,56 +758,80 @@ function holes(){
         const resultString = buildHolesResultString();
         console.log("resultString:", resultString);
         
-        // Show loading state
         submitButton.disabled = true;
         submitButton.textContent = "שולח...";
-        
-        const succeeded = await submitActivity(currentTeamNumber, currentTeamID, "holes", 1, resultString);
-        
+
+        const succeeded =
+            holesResubmitHeat != null
+                ? await resubmitActivity(
+                      currentTeamNumber,
+                      currentTeamID,
+                      "holes",
+                      holesResubmitHeat,
+                      resultString
+                  )
+                : await submitActivity(currentTeamNumber, currentTeamID, "holes", 1, resultString);
+
         if (succeeded) {
-            // Show success toast
             showSuccessToast();
-            
-            // Clear localStorage after successful submission
+
             localStorage.removeItem("holesData");
-            
-            // Update activity number to track completion
-            updateActivityNumber("holes", 1);
-            
-            // Wait 2 seconds before going back to menu
+
+            if (holesResubmitHeat == null) {
+                updateActivityNumber("holes", 1);
+            }
+
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
+
             setTimeout(() => {
-                // Remove all created elements after initialElement
                 holesContainer.remove();
-                submitContainer.remove();
+                backButton.remove();
                 topButtonContainer.remove();
                 activityNameDisplay.remove();
                 instructionsUI.destroy();
-                
-                // Reset current game
+
                 currentGame = null;
-                
-                // Display main menu
                 displayMenu();
             }, 2000);
         } else {
-            // Reset button state on failure
             submitButton.disabled = false;
-            submitButton.textContent = "שליחה";
+            submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
         }
     });
 }
 
-function sacks(){
-    // Check if sacks activity has already been submitted
+async function sacks(){
     const gameState = JSON.parse(localStorage.getItem("gameState") || "{}");
     const sacksActivities = gameState["sacks"] || [];
-    
+    let sacksResubmitHeat = null;
+
     if (sacksActivities.length > 0) {
-        // Sacks activity has already been submitted
-        alert("מקצה השקים כבר הוגש. לתיקון המקצה, עבור לעמוד תיקון תרגילים בתפריט.");
-        currentGame = null;
-        displayMenu();
-        return;
+        if (!confirm("מקצה זה כבר הוגש. האם ברצונך לתקנו?")) {
+            currentGame = null;
+            displayMenu();
+            return;
+        }
+        sacksResubmitHeat = Math.max(...sacksActivities.map(Number));
+        const fromLocal = JSON.parse(localStorage.getItem("sacksData") || "{}");
+        if (!isSacksLocalRestoreUsable(fromLocal)) {
+            showLoading();
+            let fetched = {};
+            try {
+                fetched = await fetchSacksSubmittedDataFromServer(sacksResubmitHeat);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                hideLoading();
+            }
+            if (Object.keys(fetched).length === 0) {
+                alert("לא ניתן לטעון את נתוני המקצה מהשרת.");
+                currentGame = null;
+                displayMenu();
+                return;
+            }
+            localStorage.setItem("sacksData", JSON.stringify(fetched));
+        }
     }
     
     // Create and display the activity name banner
@@ -888,8 +1024,16 @@ function sacks(){
         submitButton.disabled = true;
         submitButton.textContent = "שולח...";
         
-        // Submit activity (activity_number is 1 for sacks)
-        const succeeded = await submitActivity(currentTeamNumber, currentTeamID, "sacks", 1, resultString);
+        const succeeded =
+            sacksResubmitHeat != null
+                ? await resubmitActivity(
+                      currentTeamNumber,
+                      currentTeamID,
+                      "sacks",
+                      sacksResubmitHeat,
+                      resultString
+                  )
+                : await submitActivity(currentTeamNumber, currentTeamID, "sacks", 1, resultString);
         
         // Hide loading
         hideLoading();
@@ -905,8 +1049,9 @@ function sacks(){
             // Clear localStorage after successful submission
             localStorage.removeItem("sacksData");
             
-            // Update activity number to track completion
-            updateActivityNumber("sacks", 1);
+            if (sacksResubmitHeat == null) {
+                updateActivityNumber("sacks", 1);
+            }
             
             // Wait 2 seconds before going back to menu so user can see the success message
             setTimeout(() => {
@@ -1612,7 +1757,8 @@ function sociometricStretcher(activityNumber){
         });
     }
 
-    const limits = (assesseeNumbers.length > 19) ? [8, 2, 4] : [4, 2, 4];
+    //const limits = (assesseeNumbers.length > 19) ? [8, 2, 4] : [4, 2, 4];
+    const limits = [4, 2, 4];
     const limitTitles = ["לקחו אלונקה", "לקחו ג'ריקן", "מקום ראשון"];
     for (let i = 0; i < limits.length; i++) {
         const bracket = document.createElement("div");
