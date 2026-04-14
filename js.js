@@ -808,8 +808,9 @@ async function sacks(activityNumber){
     setActivityTitleBannerContent(activityNameDisplay, engToHeb["sacks"], activityNumber);
     initialElement.appendChild(activityNameDisplay);
     
-    const { topButtonContainer, backButton, resetButton, submitButton } =
+    const { topButtonContainer, actionsRow, backButton, resetButton, submitButton } =
         createGameTopToolbar(initialElement, { includeLoadPrevious: false });
+    topButtonContainer.classList.add("game-top-toolbar--with-undo");
     
     const instructionsUI = createActivityInstructionsModal(
         initialElement,
@@ -819,8 +820,8 @@ async function sacks(activityNumber){
     // Undo button (cancel last action)
     const actionStack = [];
     const undoButton = document.createElement("button");
-    undoButton.className = "undo-button";
-    undoButton.textContent = "בטל פעולה אחרונה";
+    undoButton.className = "undo-button undo-button--toolbar";
+    undoButton.innerHTML = '<i class="fas fa-forward"></i> בטל';
     undoButton.disabled = true;
     const updateUndoButtonState = () => {
         undoButton.disabled = actionStack.length === 0;
@@ -838,7 +839,7 @@ async function sacks(activityNumber){
         saveSacksData();
         updateUndoButtonState();
     });
-    initialElement.appendChild(undoButton);
+    actionsRow.insertBefore(undoButton, resetButton);
     
     // Create main container
     const sacksContainer = document.createElement("div");
@@ -1073,8 +1074,9 @@ function stretcher(activityNumber){
     setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElement.appendChild(activityNameDisplay);
     
-    const { topButtonContainer, backButton, resetButton, submitButton } =
+    const { topButtonContainer, actionsRow, backButton, resetButton, submitButton } =
         createGameTopToolbar(initialElement, { includeLoadPrevious: false });
+    topButtonContainer.classList.add("game-top-toolbar--with-undo");
     
     const instructionsUI = createActivityInstructionsModal(
         initialElement,
@@ -1084,8 +1086,8 @@ function stretcher(activityNumber){
     // Undo button (cancel last action)
     const actionStack = [];
     const undoButton = document.createElement("button");
-    undoButton.className = "undo-button";
-    undoButton.textContent = "בטל פעולה אחרונה";
+    undoButton.className = "undo-button undo-button--toolbar";
+    undoButton.innerHTML = '<i class="fas fa-forward"></i> בטל';
     undoButton.disabled = true;
     const updateUndoButtonState = () => {
         undoButton.disabled = actionStack.length === 0;
@@ -1103,7 +1105,7 @@ function stretcher(activityNumber){
         saveStretcherData();
         updateUndoButtonState();
     });
-    initialElement.appendChild(undoButton);
+    actionsRow.insertBefore(undoButton, resetButton);
     
     // Create main container
     const stretcherContainer = document.createElement("div");
