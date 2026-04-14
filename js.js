@@ -1757,8 +1757,7 @@ function sociometricStretcher(activityNumber){
         });
     }
 
-    //const limits = (assesseeNumbers.length > 19) ? [8, 2, 4] : [4, 2, 4];
-    const limits = [4, 2, 4];
+    const limits = (assesseeNumbers.length > 19) ? [8, 2, 4] : [4, 2, 4];
     const limitTitles = ["לקחו אלונקה", "לקחו ג'ריקן", "מקום ראשון"];
     for (let i = 0; i < limits.length; i++) {
         const bracket = document.createElement("div");
@@ -1927,91 +1926,84 @@ function sociometricStretcher(activityNumber){
         resetGame();
     });
     
-    // Validation check
-    submitButton.addEventListener("click", async () => {
-        let allBracketsFull = true;
-        
-        for (const bracket of brackets) {
-            const capacity = parseInt(bracket.dataset.maxCapacity);
-            const currentSize = bracket.querySelectorAll(".block-wrapper").length;
-        
-            if (currentSize < capacity) {
-                allBracketsFull = false;
-                break;
+    /** First bracket (אלונקה): large teams cap 8 → allow 4–8; others must be exactly full. */
+    function getSociometricSubmitValidationError() {
+        for (let i = 0; i < brackets.length; i++) {
+            const capacity = parseInt(brackets[i].dataset.maxCapacity, 10);
+            const n = brackets[i].querySelectorAll(".block-wrapper").length;
+            if (i === 0 && capacity === 8) {
+                if (n < 4) {
+                    return 'בתא "לקחו אלונקה" יש למקם לפחות 4 מוערכים.';
+                }
+                if (n > capacity) {
+                    return "שגיאה בפריסת התאים.";
+                }
+            } else {
+                if (n !== capacity) {
+                    return "חלק מהתאים אינם מלאים, לא ניתן לשלוח את הטופס.";
+                }
             }
         }
-        
-        if (allBracketsFull) {
-            // Show loading state
-            submitButton.disabled = true;
-            submitButton.textContent = "שולח...";
+        return null;
+    }
 
-            // Show loading and hide sections
-            showLoading();
+    submitButton.addEventListener("click", async () => {
+        updateUI();
+        const validationError = getSociometricSubmitValidationError();
+        if (validationError) {
+            alert(validationError);
+            return;
+        }
 
-            // Hide sections while submitting
-            const bucketSection = document.querySelector(".stretcher-bucket-section");
-            const orderSection = document.querySelector(".stretcher-order-section");
-            if (bucketSection) bucketSection.style.display = "none";
-            if (orderSection) orderSection.style.display = "none";
+        submitButton.disabled = true;
+        submitButton.textContent = "שולח...";
 
-            let finalResultString = buildFinalResultString();            
-            const succeeded = await submitActivity(currentTeamNumber, currentTeamID, "sociometric_stretcher", activityNumber, finalResultString);
+        showLoading();
 
-            // Hide loading
-            hideLoading();
+        const bucketSection = document.querySelector(".stretcher-bucket-section");
+        const orderSection = document.querySelector(".stretcher-order-section");
+        if (bucketSection) bucketSection.style.display = "none";
+        if (orderSection) orderSection.style.display = "none";
 
-            if (succeeded){
-                // Show loading state
-                submitButton.disabled = false;
-                submitButton.textContent = "שליחה";
+        const finalResultString = buildFinalResultString();
+        const succeeded = await submitActivity(
+            currentTeamNumber,
+            currentTeamID,
+            "sociometric_stretcher",
+            activityNumber,
+            finalResultString
+        );
 
-                // Show success toast
-                showSuccessToast();
-                
-                updateActivityNumber("sociometric_stretcher", activityNumber);
-                activityNumber += 1;
-                console.log("incremented activity number locally to: ", activityNumber);
-                resetGame();
-            } else {
-                alert("שגיאה בשליחת נתונים לשרת. נא לנסות שנית.");
-                // Show sections again if submission failed
-                if (bucketSection) bucketSection.style.display = "flex";
-                if (orderSection) orderSection.style.display = "flex";
-            }
-        } 
-        else {
-            alert("חלק מהתאים אינם מלאים, לא ניתן לשלוח את הטופס.");
-            // Show loading state
+        hideLoading();
+
+        if (succeeded) {
             submitButton.disabled = false;
-            submitButton.textContent = "שליחה";
+            submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
+
+            showSuccessToast();
+
+            updateActivityNumber("sociometric_stretcher", activityNumber);
+            activityNumber += 1;
+            console.log("incremented activity number locally to: ", activityNumber);
+            resetGame();
+        } else {
+            alert("שגיאה בשליחת נתונים לשרת. נא לנסות שנית.");
+            if (bucketSection) bucketSection.style.display = "flex";
+            if (orderSection) orderSection.style.display = "flex";
+            submitButton.disabled = false;
+            submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
         }
     });
 
     function buildFinalResultString() {
-        let finalResultString = "";
-
-        const stretcherWithIds = stretcherBracketResults.split(",").map(number => {
-            const id = numberToIdMap[number];
-            return `${number}:${id}`;
-        }).join(",");
-        finalResultString += `stretcher-${stretcherWithIds}`;
-
-        finalResultString += ",";
-        const firstWithIds = firstPlaceBracketResults.split(",").map(number => {
-            const id = numberToIdMap[number];
-            return `${number}:${id}`;
-        }).join(",");
-        finalResultString += `first-${firstWithIds}`;
-        
-        finalResultString += ",";
-        const jerrycanWithIds = jerrycanResultsBracketResults.split(",").map(number => {
-            const id = numberToIdMap[number];
-            return `${number}:${id}`;
-        }).join(",");
-        finalResultString += `jerrycan-${jerrycanWithIds}`;
-
-        return finalResultString;
+        const segment = (prefix, csv) => {
+            const nums = String(csv ?? "")
+                .split(",")
+                .map((s) => s.trim())
+                .filter((n) => n !== "" && numberToIdMap[n] != null);
+            return `${prefix}-${nums.map((n) => `${n}:${numberToIdMap[n]}`).join(",")}`;
+        };
+        return `${segment("stretcher", stretcherBracketResults)},${segment("first", firstPlaceBracketResults)},${segment("jerrycan", jerrycanResultsBracketResults)}`;
     }
 
     function resetGame(){
