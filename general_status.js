@@ -24,13 +24,25 @@ TB.render('component_11', function(data) {
             return $(this).text().trim() === fixedTargetHeader;
         }).index();
     
+        function parseCellInt(rawText) {
+            var cleaned = String(rawText || "").replace(/[^\d\-]/g, "");
+            var n = parseInt(cleaned, 10);
+            return Number.isFinite(n) ? n : 0;
+        }
+
+        var dynamicTargetSum = 0;
+        var fixedTargetSum = 0;
         var count = 0;
         var color_flag = 1;
         var color_flag_2 = 1;
         $('.relevant-table tr').each(function() {
             count += 1;
             var currentRow = $(this);
+            if (currentRow.hasClass("table-row-summery") || currentRow.find("td").length === 0) {
+                return;
+            }
             var currentValue = currentRow.find('td:first').text();
+            dynamicTargetSum += parseCellInt(currentRow.find('td:eq(' + dynamicTargetColumnIndex + ')').text());
 
             if (currentValue === previousValue) {
                 // Merge first column cells
@@ -85,6 +97,7 @@ TB.render('component_11', function(data) {
                 var fixed_cell = currentRow.find("td:eq(5)");
                 var status = parseInt(status_cell.text());
                 var fixed = parseInt(fixed_cell.text());
+                fixedTargetSum += parseCellInt(currentRow.find('td:eq(' + fixedTargetColumnIndex + ')').text());
                 
                 previousValue = currentValue;
                 previousRow = currentRow;
@@ -102,20 +115,22 @@ TB.render('component_11', function(data) {
             }
         });
 
-        // Select the last row and find the target cell
+        // Select the summary row and set totals (after merges)
         var summaryRow = $(".table-row-summery.row-summery-first");
-        var targetCell = summaryRow.find('td:eq(' + dynamicTargetColumnIndex + ')');
+        var dynamicTargetCell = summaryRow.find('td:eq(' + dynamicTargetColumnIndex + ')');
+        var fixedTargetCell = summaryRow.find('td:eq(' + fixedTargetColumnIndex + ')');
         var total_cell = summaryRow.find('td:eq(4)');
-        var total_value = parseInt(total_cell.text());
+        var total_value = parseCellInt(total_cell.text());
         total_cell.text(total_value - tempSum);
-        targetCell.text("");
+        dynamicTargetCell.text(dynamicTargetSum);
+        fixedTargetCell.text(fixedTargetSum);
         
     });
 });
 
 TB.render('component_13', function(data) {
     setTimeout(() => {
-        $('.madad-table tr').find('td:eq(3), th:eq(3)').hide();
+        $('.madad-table tr').find('td:eq(3), th:eq(3)').eq(1).hide();
         
         // $(".madad-table tbody tr:nth-child(1)").css("background-color", "#FF6464");
         // $(".madad-table tbody tr:nth-child(2)").css("background-color", "#FF6464");

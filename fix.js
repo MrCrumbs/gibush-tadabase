@@ -856,7 +856,11 @@ function holesResubmit(activityNumber){
 function sacksResubmit(activityNumber){
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHebTranslations["sacks"];
+    setActivityTitleBannerContent(
+        activityNameDisplay,
+        engToHebTranslations["sacks"],
+        activityNumber
+    );
     initialElementFixGrades.appendChild(activityNameDisplay);
     
     const { topButtonContainer, backButton, resetButton, submitButton } =
@@ -1841,31 +1845,22 @@ function sociometricStretcherResubmit(activityNumber){
         resetGame();
     });
     
-    function getSociometricSubmitValidationError() {
+    function hasUnderfilledBrackets() {
         for (let i = 0; i < brackets.length; i++) {
             const capacity = parseInt(brackets[i].dataset.maxCapacity, 10);
             const n = brackets[i].querySelectorAll(".block-wrapper").length;
-            if (i === 0 && capacity === 8) {
-                if (n < 4) {
-                    return 'בתא "לקחו אלונקה" יש למקם לפחות 4 מוערכים (ניתן עד 8).';
-                }
-                if (n > capacity) {
-                    return "שגיאה בפריסת התאים.";
-                }
-            } else {
-                if (n !== capacity) {
-                    return "חלק מהתאים אינם מלאים, לא ניתן לשלוח את הטופס.";
-                }
-            }
+            if (n < capacity) return true;
         }
-        return null;
+        return false;
     }
 
     submitButton.addEventListener("click", async () => {
         updateUI();
-        const validationError = getSociometricSubmitValidationError();
-        if (validationError) {
-            alert(validationError);
+        if (getTotalBlocks() === 0) {
+            alert("יש להוסיף לפחות מוערך אחד למקצה.");
+            return;
+        }
+        if (hasUnderfilledBrackets() && !confirm("לא כל התאים מלאים, האם ברצונך לשלוח בכל זאת?")) {
             return;
         }
 

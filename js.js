@@ -43,7 +43,7 @@ TB.render("component_9", async function (data) {
             sprintsOrCrawls("crawls", nextActivityNumber);
             break;
         case "sacks":
-            await sacks();
+            await sacks(nextActivityNumber);
             break;
         case "holes":
             await holes();
@@ -196,7 +196,7 @@ async function runGame(gameTitle) {
             sprintsOrCrawls("crawls", nextActivityNumber);
             break;
         case "sacks":
-            await sacks();
+            await sacks(nextActivityNumber);
             break;
         case "holes":
             await holes();
@@ -801,43 +801,11 @@ async function holes(){
     });
 }
 
-async function sacks(){
-    const gameState = JSON.parse(localStorage.getItem("gameState") || "{}");
-    const sacksActivities = gameState["sacks"] || [];
-    let sacksResubmitHeat = null;
-
-    if (sacksActivities.length > 0) {
-        if (!confirm("מקצה זה כבר הוגש. האם ברצונך לתקנו?")) {
-            currentGame = null;
-            displayMenu();
-            return;
-        }
-        sacksResubmitHeat = Math.max(...sacksActivities.map(Number));
-        const fromLocal = JSON.parse(localStorage.getItem("sacksData") || "{}");
-        if (!isSacksLocalRestoreUsable(fromLocal)) {
-            showLoading();
-            let fetched = {};
-            try {
-                fetched = await fetchSacksSubmittedDataFromServer(sacksResubmitHeat);
-            } catch (e) {
-                console.error(e);
-            } finally {
-                hideLoading();
-            }
-            if (Object.keys(fetched).length === 0) {
-                alert("לא ניתן לטעון את נתוני המקצה מהשרת.");
-                currentGame = null;
-                displayMenu();
-                return;
-            }
-            localStorage.setItem("sacksData", JSON.stringify(fetched));
-        }
-    }
-    
+async function sacks(activityNumber){
     // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
     activityNameDisplay.className = "activity-name-banner";
-    activityNameDisplay.textContent = engToHeb["sacks"];
+    setActivityTitleBannerContent(activityNameDisplay, engToHeb["sacks"], activityNumber);
     initialElement.appendChild(activityNameDisplay);
     
     const { topButtonContainer, backButton, resetButton, submitButton } =
@@ -876,7 +844,7 @@ async function sacks(){
     const sacksContainer = document.createElement("div");
     sacksContainer.className = "sacks-container";
     initialElement.appendChild(sacksContainer);
-    
+
     // Create grid for assessees
     const assesseesGrid = document.createElement("div");
     assesseesGrid.className = "assessees-grid";
@@ -1024,16 +992,13 @@ async function sacks(){
         submitButton.disabled = true;
         submitButton.textContent = "שולח...";
         
-        const succeeded =
-            sacksResubmitHeat != null
-                ? await resubmitActivity(
-                      currentTeamNumber,
-                      currentTeamID,
-                      "sacks",
-                      sacksResubmitHeat,
-                      resultString
-                  )
-                : await submitActivity(currentTeamNumber, currentTeamID, "sacks", 1, resultString);
+        const succeeded = await submitActivity(
+            currentTeamNumber,
+            currentTeamID,
+            "sacks",
+            activityNumber,
+            resultString
+        );
         
         // Hide loading
         hideLoading();
@@ -1049,9 +1014,7 @@ async function sacks(){
             // Clear localStorage after successful submission
             localStorage.removeItem("sacksData");
             
-            if (sacksResubmitHeat == null) {
-                updateActivityNumber("sacks", 1);
-            }
+            updateActivityNumber("sacks", activityNumber);
             
             // Wait 2 seconds before going back to menu so user can see the success message
             setTimeout(() => {
@@ -1146,6 +1109,108 @@ function stretcher(activityNumber){
     const stretcherContainer = document.createElement("div");
     stretcherContainer.className = "sacks-container";
     initialElement.appendChild(stretcherContainer);
+
+    // Stopwatch widget (for stretcher)
+    const stopwatchWidget = document.createElement("div");
+    stopwatchWidget.className = "stretcher-stopwatch";
+    const stopwatchDisplay = document.createElement("div");
+    stopwatchDisplay.className = "stretcher-stopwatch-display";
+    const stopwatchActions = document.createElement("div");
+    stopwatchActions.className = "stretcher-stopwatch-actions";
+    const stopwatchToggleButton = document.createElement("button");
+    stopwatchToggleButton.className = "stretcher-stopwatch-button";
+    const stopwatchResetButton = document.createElement("button");
+    stopwatchResetButton.className = "stretcher-stopwatch-button stretcher-stopwatch-button--reset";
+    stopwatchResetButton.textContent = "איפוס";
+    stopwatchActions.appendChild(stopwatchToggleButton);
+    stopwatchActions.appendChild(stopwatchResetButton);
+    stopwatchWidget.appendChild(stopwatchDisplay);
+    stopwatchWidget.appendChild(stopwatchActions);
+    initialElement.appendChild(stopwatchWidget);
+
+    let stopwatchInterval = null;
+    let stopwatchStartMs = 0;
+    let stopwatchElapsedMs = 0;
+    let stopwatchAlertFired = false;
+
+    const formatStopwatch = (ms) => {
+        const totalSec = Math.floor(ms / 1000);
+        const min = Math.floor(totalSec / 60);
+        const sec = totalSec % 60;
+        return `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+    };
+
+    const playStopwatchAlertTone = () => {
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.36);
+            setTimeout(() => ctx.close().catch(() => {}), 450);
+        } catch (e) {
+            console.log("stopwatch tone unavailable", e);
+        }
+    };
+
+    const renderStopwatch = () => {
+        stopwatchDisplay.textContent = formatStopwatch(stopwatchElapsedMs);
+        const over60 = stopwatchElapsedMs >= 60000;
+        stopwatchDisplay.classList.toggle("stretcher-stopwatch-display--alert", over60);
+        stopwatchToggleButton.textContent = stopwatchInterval ? "עצור" : "התחל";
+    };
+
+    const maybeTriggerStopwatchAlert = () => {
+        if (stopwatchAlertFired || stopwatchElapsedMs < 60000) return;
+        stopwatchAlertFired = true;
+        if (navigator.vibrate) {
+            navigator.vibrate([120, 80, 120]);
+        }
+        playStopwatchAlertTone();
+    };
+
+    const tickStopwatch = () => {
+        stopwatchElapsedMs = Math.max(0, performance.now() - stopwatchStartMs);
+        maybeTriggerStopwatchAlert();
+        renderStopwatch();
+    };
+
+    const startStopwatch = () => {
+        if (stopwatchInterval) return;
+        stopwatchStartMs = performance.now() - stopwatchElapsedMs;
+        stopwatchInterval = setInterval(tickStopwatch, 100);
+        renderStopwatch();
+    };
+
+    const stopStopwatch = () => {
+        if (!stopwatchInterval) return;
+        clearInterval(stopwatchInterval);
+        stopwatchInterval = null;
+        renderStopwatch();
+    };
+
+    const resetStopwatch = () => {
+        stopStopwatch();
+        stopwatchElapsedMs = 0;
+        stopwatchAlertFired = false;
+        renderStopwatch();
+    };
+
+    stopwatchToggleButton.addEventListener("click", () => {
+        if (stopwatchInterval) stopStopwatch();
+        else startStopwatch();
+    });
+    stopwatchResetButton.addEventListener("click", resetStopwatch);
+    renderStopwatch();
     
     // Create grid for assessees
     const assesseesGrid = document.createElement("div");
@@ -1250,7 +1315,9 @@ function stretcher(activityNumber){
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
+        stopStopwatch();
         stretcherContainer.remove();
+        stopwatchWidget.remove();
         backButton.remove();
         topButtonContainer.remove();
         activityNameDisplay.remove();
@@ -1273,6 +1340,7 @@ function stretcher(activityNumber){
             });
             actionStack.length = 0;
             updateUndoButtonState();
+            resetStopwatch();
         }
     });
     
@@ -1359,6 +1427,7 @@ function stretcher(activityNumber){
         });
         actionStack.length = 0;
         updateUndoButtonState();
+        resetStopwatch();
         
         const banner = document.querySelector(".activity-name-banner");
         if (banner) {
@@ -1387,7 +1456,7 @@ function sociometricStretcher(activityNumber){
     const gameLayout = document.createElement("div");
     gameLayout.className = "stretcher-game-layout";
     initialElement.appendChild(gameLayout);
-    
+
     const bucketSection = document.createElement("div");
     bucketSection.className = "stretcher-bucket-section";
     gameLayout.appendChild(bucketSection);
@@ -1926,32 +1995,22 @@ function sociometricStretcher(activityNumber){
         resetGame();
     });
     
-    /** First bracket (אלונקה): large teams cap 8 → allow 4–8; others must be exactly full. */
-    function getSociometricSubmitValidationError() {
+    function hasUnderfilledBrackets() {
         for (let i = 0; i < brackets.length; i++) {
             const capacity = parseInt(brackets[i].dataset.maxCapacity, 10);
             const n = brackets[i].querySelectorAll(".block-wrapper").length;
-            if (i === 0 && capacity === 8) {
-                if (n < 4) {
-                    return 'בתא "לקחו אלונקה" יש למקם לפחות 4 מוערכים.';
-                }
-                if (n > capacity) {
-                    return "שגיאה בפריסת התאים.";
-                }
-            } else {
-                if (n !== capacity) {
-                    return "חלק מהתאים אינם מלאים, לא ניתן לשלוח את הטופס.";
-                }
-            }
+            if (n < capacity) return true;
         }
-        return null;
+        return false;
     }
 
     submitButton.addEventListener("click", async () => {
         updateUI();
-        const validationError = getSociometricSubmitValidationError();
-        if (validationError) {
-            alert(validationError);
+        if (getTotalBlocks() === 0) {
+            alert("יש להוסיף לפחות מוערך אחד למקצה.");
+            return;
+        }
+        if (hasUnderfilledBrackets() && !confirm("לא כל התאים מלאים, האם ברצונך לשלוח בכל זאת?")) {
             return;
         }
 
