@@ -611,10 +611,23 @@ width: 100%;
 
 .top-button-container.game-top-toolbar .submit-button.submit-button--toolbar,
 .top-button-container.game-top-toolbar .reset-button,
-.top-button-container.game-top-toolbar .load-previous-arrangement-button {
+.top-button-container.game-top-toolbar .load-previous-arrangement-button,
+.top-button-container.game-top-toolbar .undo-button.undo-button--toolbar {
   flex: 1;
   width: auto;
   min-width: 0;
+}
+
+.top-button-container.game-top-toolbar.game-top-toolbar--with-undo
+  .submit-button.submit-button--toolbar {
+  flex: 2;
+}
+
+.top-button-container.game-top-toolbar.game-top-toolbar--with-undo
+  .undo-button.undo-button--toolbar,
+.top-button-container.game-top-toolbar.game-top-toolbar--with-undo
+  .reset-button {
+  flex: 1;
 }
 
 .load-previous-arrangement-button {
@@ -1276,6 +1289,19 @@ cursor: pointer;
 font-size: 14px;
 }
 
+.undo-button.undo-button--toolbar {
+margin: 0;
+padding: 10px 16px;
+font-size: 16px;
+border-radius: 4px;
+width: auto;
+display: flex;
+align-items: center;
+justify-content: center;
+gap: 6px;
+text-align: center;
+}
+
 .undo-button:disabled {
 opacity: 0.5;
 cursor: not-allowed;
@@ -1288,7 +1314,7 @@ cursor: not-allowed;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 20px;
+  padding: 10px 8px;
   max-width: 1200px;
   margin: 0 auto;
   /* Prevent double-tap zoom on mobile */
@@ -1393,6 +1419,101 @@ cursor: not-allowed;
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Sacks enhanced UX (scoped to sacks only) */
+.sacks-container--enhanced .sacks-assessees-grid {
+  gap: 16px 14px;
+}
+
+.sacks-container--enhanced .sacks-assessee-card {
+  gap: 0;
+  position: relative;
+  width: 84px;
+  height: 56px;
+  justify-content: center;
+}
+
+.sacks-container--enhanced .sacks-assessee-ball {
+  width: 84px;
+  height: 56px;
+  border-radius: 27px;
+  font-size: 21px;
+  box-shadow: 0 3px 10px rgba(102, 126, 234, 0.35);
+}
+
+.sacks-container--enhanced .sacks-lap-counter {
+  position: absolute;
+  top: -6px;
+  right: -7px;
+  min-width: 28px;
+  padding: 1px 7px;
+  font-size: 12px;
+  border-radius: 999px;
+  z-index: 2;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.sacks-press-indicator {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  background: rgba(26, 33, 74, 0.95);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  min-width: 48px;
+  text-align: center;
+  padding: 6px 10px;
+  border-radius: 12px;
+  z-index: 1100;
+  pointer-events: none;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.sacks-history-section {
+  width: 100%;
+  max-width: 1000px;
+  margin-top: 12px;
+}
+
+.sacks-history-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #43507a;
+  margin-bottom: 6px;
+  text-align: right;
+}
+
+.sacks-history-list {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 6px 2px 4px;
+  direction: rtl;
+  scroll-behavior: smooth;
+}
+
+.sacks-history-chip {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sacks-history-chip--inc {
+  background: #2e7d32;
+}
+
+.sacks-history-chip--dec {
+  background: #c62828;
+}
+
+.sacks-history-chip--undo {
+  background: #546e7a;
+}
+
 /* Responsive design for sacks activity */
 @media (max-width: 768px) {
   .assessees-grid {
@@ -1407,6 +1528,27 @@ cursor: not-allowed;
       font-size: 11px;
       min-width: 18px;
       padding: 1px 3px;
+  }
+  .sacks-container--enhanced .sacks-assessee-ball {
+      width: 74px;
+      height: 52px;
+      border-radius: 25px;
+      font-size: 19px;
+  }
+  .sacks-container--enhanced .sacks-assessee-card {
+      width: 74px;
+      height: 52px;
+  }
+  .sacks-container--enhanced .sacks-lap-counter {
+      top: -5px;
+      right: -6px;
+      min-width: 24px;
+      font-size: 11px;
+  }
+  .sacks-press-indicator {
+      font-size: 20px;
+      min-width: 44px;
+      padding: 5px 8px;
   }
 }
 
@@ -1423,6 +1565,27 @@ cursor: not-allowed;
       font-size: 10px;
       min-width: 16px;
       padding: 1px 2px;
+  }
+  .sacks-container--enhanced .sacks-assessee-ball {
+      width: 66px;
+      height: 48px;
+      border-radius: 23px;
+      font-size: 17px;
+  }
+  .sacks-container--enhanced .sacks-assessee-card {
+      width: 66px;
+      height: 48px;
+  }
+  .sacks-container--enhanced .sacks-lap-counter {
+      top: -4px;
+      right: -5px;
+      min-width: 22px;
+      font-size: 10px;
+      padding: 1px 5px;
+  }
+  .sacks-history-chip {
+      font-size: 12px;
+      padding: 4px 9px;
   }
 }
 

@@ -472,7 +472,7 @@ background-color: #d32f2f;
 
 /* Bucket Section — sticky below host chrome + absolute back/help on .tb-main-content */
 .bucket-section {
-flex: 0 0 50%;
+flex: 0 0 54%;
 margin-right: 10px;
 padding: 10px;
 border: 1px solid #ccc;
@@ -513,14 +513,14 @@ align-content: flex-start;
 display: flex;
 align-items: center;
 justify-content: center;
-width: 60px;
-height: 60px;
+width: 66px;
+height: 66px;
 background-color: #265728;
 color: white;
 border-radius: 5px;
 cursor: pointer;
 font-weight: bold;
-font-size: 22px;
+font-size: 24px;
 transition: transform 0.2s, background-color 0.2s;
 margin-right: 4px;
 }
@@ -532,7 +532,7 @@ background-color: #3e8e41;
 
 /* Order Section */
 .order-section {
-flex: 0 0 50%;
+flex: 0 0 44%;
 padding: 10px;
 border: 1px solid #ccc;
 border-radius: 5px;
@@ -557,12 +557,12 @@ direction: rtl;
 
 .block {
 width: 100%;
-height: 50px;
+height: 44px;
 margin: 5px 5px;
 background-color: #265728;
 color: white;
 display: flex;
-font-size: 20px;
+font-size: 18px;
 font-weight: bold;
 justify-content: center;
 align-items: center;
@@ -604,7 +604,7 @@ align-items: center;
 position: relative;
 touch-action: none;
 width: 100%;
-max-width: 280px;
+max-width: 250px;
 margin-bottom: 8px;
 overflow: visible;
 box-sizing: border-box;
@@ -804,7 +804,7 @@ html {
 }
 
 .bucket-section {
-  flex: 0 0 45%;
+  flex: 0 0 58%;
   margin-right: 5px;
   overflow-y: visible;
   padding: 5px;
@@ -812,7 +812,7 @@ html {
 }
 
 .order-section {
-  flex: 0 0 52%; /* Narrower order section */
+  flex: 0 0 40%;
   padding: 5px;
 }
 
@@ -834,9 +834,9 @@ html {
 }
 
 .bucket-block {
-  width: 45px; /* Smaller to fit 3 in a row */
-  height: 45px;
-  font-size: 16px;
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
   margin: 2px;
 }
 
@@ -851,8 +851,8 @@ html {
 .block {
   margin: 3px;
   padding: 5px 8px;
-  font-size: 16px;
-  height: 40px;
+  font-size: 13px;
+  height: 34px;
 }
 
 .bracket-title {
@@ -861,8 +861,10 @@ html {
 }
 
 .block-wrapper {
-  width: 100%;
-  max-width: 100%;
+  width: 94%;
+  max-width: 94%;
+  margin-left: auto;
+  margin-right: auto;
 }
 }
 
@@ -874,7 +876,7 @@ html {
 }
 
 .bucket-section {
-  flex: 0 0 35%;
+  flex: 0 0 56%;
   margin-right: 5px;
   overflow-y: visible; /* Prevent scrolling */
 }
@@ -886,14 +888,14 @@ html {
 }
 
 .bucket-block {
-  width: 40px;
-  height: 40px;
-  font-size: 16px;
+  width: 52px;
+  height: 52px;
+  font-size: 19px;
   margin: 2px;
 }
 
 .order-section {
-  flex: 0 0 60%;
+  flex: 0 0 42%;
 }
 
 .order-section-centered {
@@ -909,8 +911,10 @@ html {
 }
 
 .block-wrapper {
-  max-width: 100%;
-  width: 100%;
+  max-width: 92%;
+  width: 92%;
+  margin-left: auto;
+  margin-right: auto;
 }
 }
 
@@ -966,12 +970,12 @@ body {
 }
 
 .bucket-section {
-  flex: 0 0 48%;
+  flex: 0 0 58% !important;
   justify-content: flex-start;
 }
 
 .order-section {
-  flex: 0 0 49%;
+  flex: 0 0 39% !important;
 }
 
 .bucket-items {
@@ -985,10 +989,10 @@ body {
 }
 
 .bucket-block {
-  width: 28vw; /* Use viewport width to ensure 3 blocks per row */
-  max-width: 40px;
-  height: 40px;
-  font-size: 14px;
+  width: 31vw;
+  max-width: 54px;
+  height: 54px;
+  font-size: 18px;
   margin: 1px;
 }
 
@@ -999,28 +1003,43 @@ body {
 }
 
 .block {
-  font-size: 14px;
+  font-size: 12px;
+  height: 32px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.block-wrapper {
+  width: 90%;
+  max-width: 90%;
+  margin-left: auto;
+  margin-right: auto;
 }
 }
 
 /* Very small screens */
 @media (max-width: 360px) {
   .bucket-block {
-    width: 36px;
-    height: 36px;
-    font-size: 14px;
+    width: 48px;
+    height: 48px;
+    font-size: 17px;
     margin: 2px;
   }
 
   .bucket-section {
-    flex: 0 0 30%;
+    flex: 0 0 54%;
   }
 
   .order-section {
-    flex: 0 0 65%;
+    flex: 0 0 44%;
+  }
+
+  .block-wrapper {
+    width: 90%;
+    max-width: 90%;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
@@ -1077,7 +1096,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 20px;
+    padding: 10px 8px;
     max-width: 1200px;
     margin: 0 auto;
     /* Prevent double-tap zoom on mobile */
@@ -1180,6 +1199,101 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
+/* Sacks enhanced UX (scoped to sacks only) */
+.sacks-container--enhanced .sacks-assessees-grid {
+    gap: 16px 14px;
+}
+
+.sacks-container--enhanced .sacks-assessee-card {
+    gap: 0;
+    position: relative;
+    width: 84px;
+    height: 56px;
+    justify-content: center;
+}
+
+.sacks-container--enhanced .sacks-assessee-ball {
+    width: 84px;
+    height: 56px;
+    border-radius: 27px;
+    font-size: 21px;
+    box-shadow: 0 3px 10px rgba(102, 126, 234, 0.35);
+}
+
+.sacks-container--enhanced .sacks-lap-counter {
+    position: absolute;
+    top: -6px;
+    right: -7px;
+    min-width: 28px;
+    padding: 1px 7px;
+    font-size: 12px;
+    border-radius: 999px;
+    z-index: 2;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+}
+
+.sacks-press-indicator {
+    position: fixed;
+    transform: translate(-50%, -100%);
+    background: rgba(26, 33, 74, 0.95);
+    color: #fff;
+    font-size: 22px;
+    font-weight: 700;
+    min-width: 48px;
+    text-align: center;
+    padding: 6px 10px;
+    border-radius: 12px;
+    z-index: 1100;
+    pointer-events: none;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+.sacks-history-section {
+    width: 100%;
+    max-width: 1000px;
+    margin-top: 12px;
+}
+
+.sacks-history-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #43507a;
+    margin-bottom: 6px;
+    text-align: right;
+}
+
+.sacks-history-list {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 6px 2px 4px;
+    direction: rtl;
+    scroll-behavior: smooth;
+}
+
+.sacks-history-chip {
+    flex: 0 0 auto;
+    padding: 5px 10px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.sacks-history-chip--inc {
+    background: #2e7d32;
+}
+
+.sacks-history-chip--dec {
+    background: #c62828;
+}
+
+.sacks-history-chip--undo {
+    background: #546e7a;
+}
+
 .stretcher-stopwatch {
     margin: 14px auto 18px;
     padding: 14px 16px;
@@ -1271,6 +1385,27 @@ body {
         min-width: 18px;
         padding: 1px 3px;
     }
+    .sacks-container--enhanced .sacks-assessee-ball {
+        width: 74px;
+        height: 52px;
+        border-radius: 25px;
+        font-size: 19px;
+    }
+    .sacks-container--enhanced .sacks-assessee-card {
+        width: 74px;
+        height: 52px;
+    }
+    .sacks-container--enhanced .sacks-lap-counter {
+        top: -5px;
+        right: -6px;
+        min-width: 24px;
+        font-size: 11px;
+    }
+    .sacks-press-indicator {
+        font-size: 20px;
+        min-width: 44px;
+        padding: 5px 8px;
+    }
     .stretcher-stopwatch {
         width: min(340px, 95vw);
         padding: 10px 12px;
@@ -1302,6 +1437,27 @@ body {
         font-size: 10px;
         min-width: 16px;
         padding: 1px 2px;
+    }
+    .sacks-container--enhanced .sacks-assessee-ball {
+        width: 66px;
+        height: 48px;
+        border-radius: 23px;
+        font-size: 17px;
+    }
+    .sacks-container--enhanced .sacks-assessee-card {
+        width: 66px;
+        height: 48px;
+    }
+    .sacks-container--enhanced .sacks-lap-counter {
+        top: -4px;
+        right: -5px;
+        min-width: 22px;
+        font-size: 10px;
+        padding: 1px 5px;
+    }
+    .sacks-history-chip {
+        font-size: 12px;
+        padding: 4px 8px;
     }
 }
 

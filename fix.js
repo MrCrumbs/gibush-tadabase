@@ -863,8 +863,9 @@ function sacksResubmit(activityNumber){
     );
     initialElementFixGrades.appendChild(activityNameDisplay);
     
-    const { topButtonContainer, backButton, resetButton, submitButton } =
+    const { topButtonContainer, actionsRow, backButton, resetButton, submitButton } =
         createGameTopToolbar(initialElementFixGrades, { includeLoadPrevious: false });
+    topButtonContainer.classList.add("game-top-toolbar--with-undo");
     
     const instructionsUI = createActivityInstructionsModal(
         initialElementFixGrades,
@@ -874,8 +875,8 @@ function sacksResubmit(activityNumber){
     // Undo button (cancel last action)
     const actionStack = [];
     const undoButton = document.createElement("button");
-    undoButton.className = "undo-button";
-    undoButton.textContent = "בטל פעולה אחרונה";
+    undoButton.className = "undo-button undo-button--toolbar";
+    undoButton.innerHTML = '<i class="fas fa-forward"></i> בטל';
     undoButton.disabled = true;
     const updateUndoButtonState = () => {
         undoButton.disabled = actionStack.length === 0;
@@ -892,34 +893,105 @@ function sacksResubmit(activityNumber){
         lapCounter.textContent = next.toString();
         saveSacksData();
         updateUndoButtonState();
+        addHistoryEntry("undo", last.number);
     });
-    initialElementFixGrades.appendChild(undoButton);
+    actionsRow.insertBefore(undoButton, resetButton);
     
     // Create main container
     const sacksContainer = document.createElement("div");
     sacksContainer.className = "sacks-container";
+    sacksContainer.classList.add("sacks-container--enhanced");
     initialElementFixGrades.appendChild(sacksContainer);
     
     // Create grid for assessees
     const assesseesGrid = document.createElement("div");
     assesseesGrid.className = "assessees-grid";
+    assesseesGrid.classList.add("sacks-assessees-grid");
     sacksContainer.appendChild(assesseesGrid);
+
+    const historySection = document.createElement("div");
+    historySection.className = "sacks-history-section";
+    const historyTitle = document.createElement("div");
+    historyTitle.className = "sacks-history-title";
+    historyTitle.textContent = "פעולות אחרונות";
+    const historyList = document.createElement("div");
+    historyList.className = "sacks-history-list";
+    historySection.appendChild(historyTitle);
+    historySection.appendChild(historyList);
+    sacksContainer.appendChild(historySection);
     
     // Load existing data from localStorage
     const sacksData = JSON.parse(localStorage.getItem("sacksData") || "{}");
+
+    let pressIndicatorEl = null;
+    let pressIndicatorTimeout = null;
+
+    function hidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+            pressIndicatorTimeout = null;
+        }
+        if (pressIndicatorEl?.parentNode) {
+            pressIndicatorEl.remove();
+        }
+        pressIndicatorEl = null;
+    }
+
+    function showPressIndicator(number, ballEl) {
+        hidePressIndicator();
+        const rect = ballEl.getBoundingClientRect();
+        const indicator = document.createElement("div");
+        indicator.className = "sacks-press-indicator";
+        indicator.textContent = number;
+        indicator.style.left = `${rect.left + rect.width / 2}px`;
+        indicator.style.top = `${rect.top - 8}px`;
+        document.body.appendChild(indicator);
+        pressIndicatorEl = indicator;
+    }
+
+    function scheduleHidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+        }
+        pressIndicatorTimeout = setTimeout(hidePressIndicator, 180);
+    }
+
+    function addHistoryEntry(type, number) {
+        const chip = document.createElement("div");
+        chip.className = "sacks-history-chip";
+        if (type === "inc") {
+            chip.textContent = `${number} +`;
+            chip.classList.add("sacks-history-chip--inc");
+        } else if (type === "dec") {
+            chip.textContent = `${number} -`;
+            chip.classList.add("sacks-history-chip--dec");
+        } else {
+            chip.textContent = `בטל ${number}`;
+            chip.classList.add("sacks-history-chip--undo");
+        }
+        historyList.appendChild(chip);
+        chip.scrollIntoView({ block: "nearest", inline: "end" });
+    }
+
+    function clearHistoryEntries() {
+        historyList.replaceChildren();
+    }
     
     // Create assessee balls
     assesseeNumbersFixGrades.forEach(assesseeNumber => {
         const assesseeCard = document.createElement("div");
         assesseeCard.className = "assessee-card";
+        assesseeCard.classList.add("sacks-assessee-card");
         assesseeCard.dataset.number = assesseeNumber;
 
         const ball = document.createElement("div");
         ball.className = "assessee-ball";
+        ball.classList.add("sacks-assessee-ball");
         ball.textContent = assesseeNumber;
 
         const lapCounter = document.createElement("div");
         lapCounter.className = "lap-counter";
+        lapCounter.classList.add("sacks-lap-counter");
         lapCounter.textContent = sacksData[assesseeNumber] || "0";
 
         // Interaction: tap to increment, long-press to show minus button
@@ -945,6 +1017,7 @@ function sacksResubmit(activityNumber){
             e.preventDefault();
             longPressTriggered = false;
             hideMinusButton(); // Hide any existing minus button
+            showPressIndicator(assesseeNumber, ball);
             
             pressTimer = setTimeout(() => {
                 longPressTriggered = true;
@@ -969,6 +1042,7 @@ function sacksResubmit(activityNumber){
                         actionStack.push({ number: assesseeNumber, delta: -1 });
                         updateUndoButtonState();
                         saveSacksData();
+                        addHistoryEntry("dec", assesseeNumber);
                     }
                     hideMinusButton();
                 });
@@ -988,12 +1062,20 @@ function sacksResubmit(activityNumber){
                 actionStack.push({ number: assesseeNumber, delta: +1 });
                 updateUndoButtonState();
                 saveSacksData();
+                addHistoryEntry("inc", assesseeNumber);
             }
             clearPressTimer();
+            scheduleHidePressIndicator();
         });
 
-        ball.addEventListener("pointercancel", clearPressTimer);
-        ball.addEventListener("pointerleave", clearPressTimer);
+        ball.addEventListener("pointercancel", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
+        ball.addEventListener("pointerleave", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
 
         assesseeCard.appendChild(lapCounter);
         assesseeCard.appendChild(ball);
@@ -1003,6 +1085,8 @@ function sacksResubmit(activityNumber){
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
+        hidePressIndicator();
+        clearHistoryEntries();
         sacksContainer.remove();
         backButton.remove();
         topButtonContainer.remove();
@@ -1023,6 +1107,8 @@ function sacksResubmit(activityNumber){
             });
             actionStack.length = 0;
             updateUndoButtonState();
+            hidePressIndicator();
+            clearHistoryEntries();
         }
     });
     
@@ -1060,6 +1146,8 @@ function sacksResubmit(activityNumber){
             
             // Clear localStorage after successful submission
             localStorage.removeItem("sacksData");
+            hidePressIndicator();
+            clearHistoryEntries();
             
             // Wait 2 seconds before going back to activities list so user can see the success message
             setTimeout(() => {
@@ -1115,8 +1203,9 @@ function stretcherResubmit(activityNumber){
     setActivityTitleBannerContent(activityNameDisplay, activityLabel, activityNumber);
     initialElementFixGrades.appendChild(activityNameDisplay);
     
-    const { topButtonContainer, backButton, resetButton, submitButton } =
+    const { topButtonContainer, actionsRow, backButton, resetButton, submitButton } =
         createGameTopToolbar(initialElementFixGrades);
+    topButtonContainer.classList.add("game-top-toolbar--with-undo");
     
     const instructionsUI = createActivityInstructionsModal(
         initialElementFixGrades,
@@ -1126,8 +1215,8 @@ function stretcherResubmit(activityNumber){
     // Undo button (cancel last action)
     const actionStack = [];
     const undoButton = document.createElement("button");
-    undoButton.className = "undo-button";
-    undoButton.textContent = "בטל פעולה אחרונה";
+    undoButton.className = "undo-button undo-button--toolbar";
+    undoButton.innerHTML = '<i class="fas fa-forward"></i> בטל';
     undoButton.disabled = true;
     const updateUndoButtonState = () => {
         undoButton.disabled = actionStack.length === 0;
@@ -1145,7 +1234,7 @@ function stretcherResubmit(activityNumber){
         saveStretcherData();
         updateUndoButtonState();
     });
-    initialElementFixGrades.appendChild(undoButton);
+    actionsRow.insertBefore(undoButton, resetButton);
     
     // Create main container
     const stretcherContainer = document.createElement("div");

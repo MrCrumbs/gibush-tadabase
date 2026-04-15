@@ -838,34 +838,115 @@ async function sacks(activityNumber){
         lapCounter.textContent = next.toString();
         saveSacksData();
         updateUndoButtonState();
+        if (last.delta > 0) {
+            removeLastHistoryChipFor(last.number);
+        } else if (last.delta < 0) {
+            appendHistoryChip(last.number);
+        }
     });
     actionsRow.insertBefore(undoButton, resetButton);
     
     // Create main container
     const sacksContainer = document.createElement("div");
     sacksContainer.className = "sacks-container";
+    sacksContainer.classList.add("sacks-container--enhanced");
     initialElement.appendChild(sacksContainer);
 
     // Create grid for assessees
     const assesseesGrid = document.createElement("div");
     assesseesGrid.className = "assessees-grid";
+    assesseesGrid.classList.add("sacks-assessees-grid");
     sacksContainer.appendChild(assesseesGrid);
+
+    // Recent operations history (horizontal scroll)
+    const historySection = document.createElement("div");
+    historySection.className = "sacks-history-section";
+    const historyTitle = document.createElement("div");
+    historyTitle.className = "sacks-history-title";
+    historyTitle.textContent = "פעולות אחרונות";
+    const historyList = document.createElement("div");
+    historyList.className = "sacks-history-list";
+    historySection.appendChild(historyTitle);
+    historySection.appendChild(historyList);
+    sacksContainer.appendChild(historySection);
     
     // Load existing data from localStorage
     const sacksData = JSON.parse(localStorage.getItem("sacksData") || "{}");
+
+    let pressIndicatorEl = null;
+    let pressIndicatorTimeout = null;
+
+    function hidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+            pressIndicatorTimeout = null;
+        }
+        if (pressIndicatorEl?.parentNode) {
+            pressIndicatorEl.remove();
+        }
+        pressIndicatorEl = null;
+    }
+
+    function showPressIndicator(number, ballEl) {
+        hidePressIndicator();
+        const rect = ballEl.getBoundingClientRect();
+        const indicator = document.createElement("div");
+        indicator.className = "sacks-press-indicator";
+        indicator.textContent = number;
+        indicator.style.left = `${rect.left + rect.width / 2}px`;
+        indicator.style.top = `${rect.top - 8}px`;
+        document.body.appendChild(indicator);
+        pressIndicatorEl = indicator;
+    }
+
+    function scheduleHidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+        }
+        pressIndicatorTimeout = setTimeout(hidePressIndicator, 180);
+    }
+
+    function appendHistoryChip(number) {
+        const chip = document.createElement("div");
+        chip.className = "sacks-history-chip";
+        chip.textContent = `${number}`;
+        chip.classList.add("sacks-history-chip--inc");
+        chip.dataset.number = String(number);
+        historyList.appendChild(chip);
+        chip.scrollIntoView({ block: "nearest", inline: "end" });
+    }
+
+    function removeLastHistoryChipFor(number) {
+        const target = String(number);
+        const chips = historyList.querySelectorAll(".sacks-history-chip--inc");
+        for (let i = chips.length - 1; i >= 0; i -= 1) {
+            if (chips[i].dataset.number === target) {
+                chips[i].remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function clearHistoryEntries() {
+        historyList.replaceChildren();
+    }
     
     // Create assessee balls
     assesseeNumbers.forEach(assesseeNumber => {
         const assesseeCard = document.createElement("div");
         assesseeCard.className = "assessee-card";
+        assesseeCard.classList.add("sacks-assessee-card");
         assesseeCard.dataset.number = assesseeNumber;
 
         const ball = document.createElement("div");
         ball.className = "assessee-ball";
+        ball.classList.add("sacks-assessee-ball");
         ball.textContent = assesseeNumber;
 
         const lapCounter = document.createElement("div");
         lapCounter.className = "lap-counter";
+        lapCounter.classList.add("sacks-lap-counter");
         lapCounter.textContent = sacksData[assesseeNumber] || "0";
 
         // Interaction: tap to increment, long-press to show minus button
@@ -891,6 +972,7 @@ async function sacks(activityNumber){
             e.preventDefault();
             longPressTriggered = false;
             hideMinusButton(); // Hide any existing minus button
+            showPressIndicator(assesseeNumber, ball);
             
             pressTimer = setTimeout(() => {
                 longPressTriggered = true;
@@ -915,6 +997,7 @@ async function sacks(activityNumber){
                         actionStack.push({ number: assesseeNumber, delta: -1 });
                         updateUndoButtonState();
                         saveSacksData();
+                        removeLastHistoryChipFor(assesseeNumber);
                     }
                     hideMinusButton();
                 });
@@ -934,12 +1017,20 @@ async function sacks(activityNumber){
                 actionStack.push({ number: assesseeNumber, delta: +1 });
                 updateUndoButtonState();
                 saveSacksData();
+                appendHistoryChip(assesseeNumber);
             }
             clearPressTimer();
+            scheduleHidePressIndicator();
         });
 
-        ball.addEventListener("pointercancel", clearPressTimer);
-        ball.addEventListener("pointerleave", clearPressTimer);
+        ball.addEventListener("pointercancel", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
+        ball.addEventListener("pointerleave", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
 
         assesseeCard.appendChild(lapCounter);
         assesseeCard.appendChild(ball);
@@ -949,6 +1040,8 @@ async function sacks(activityNumber){
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
+        hidePressIndicator();
+        clearHistoryEntries();
         sacksContainer.remove();
         backButton.remove();
         topButtonContainer.remove();
@@ -972,6 +1065,8 @@ async function sacks(activityNumber){
             });
             actionStack.length = 0;
             updateUndoButtonState();
+            hidePressIndicator();
+            clearHistoryEntries();
         }
     });
     
@@ -1014,6 +1109,8 @@ async function sacks(activityNumber){
             
             // Clear localStorage after successful submission
             localStorage.removeItem("sacksData");
+            hidePressIndicator();
+            clearHistoryEntries();
             
             updateActivityNumber("sacks", activityNumber);
             
