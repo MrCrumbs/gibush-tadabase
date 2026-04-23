@@ -1201,12 +1201,18 @@ function stretcher(activityNumber){
         lapCounter.textContent = next.toString();
         saveStretcherData();
         updateUndoButtonState();
+        if (last.delta > 0) {
+            removeLastHistoryChipFor(last.number);
+        } else if (last.delta < 0) {
+            appendHistoryChip(last.number);
+        }
     });
     actionsRow.insertBefore(undoButton, resetButton);
     
     // Create main container
     const stretcherContainer = document.createElement("div");
     stretcherContainer.className = "sacks-container";
+    stretcherContainer.classList.add("sacks-container--enhanced");
     initialElement.appendChild(stretcherContainer);
 
     // Stopwatch widget (for stretcher)
@@ -1314,23 +1320,97 @@ function stretcher(activityNumber){
     // Create grid for assessees
     const assesseesGrid = document.createElement("div");
     assesseesGrid.className = "assessees-grid";
+    assesseesGrid.classList.add("sacks-assessees-grid");
     stretcherContainer.appendChild(assesseesGrid);
+
+    const historySection = document.createElement("div");
+    historySection.className = "sacks-history-section";
+    const historyTitle = document.createElement("div");
+    historyTitle.className = "sacks-history-title";
+    historyTitle.textContent = "פעולות אחרונות";
+    const historyList = document.createElement("div");
+    historyList.className = "sacks-history-list";
+    historySection.appendChild(historyTitle);
+    historySection.appendChild(historyList);
+    stretcherContainer.appendChild(historySection);
     
     // Load existing data from localStorage
     const stretcherData = JSON.parse(localStorage.getItem("stretcherData") || "{}");
+
+    let pressIndicatorEl = null;
+    let pressIndicatorTimeout = null;
+
+    function hidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+            pressIndicatorTimeout = null;
+        }
+        if (pressIndicatorEl?.parentNode) {
+            pressIndicatorEl.remove();
+        }
+        pressIndicatorEl = null;
+    }
+
+    function showPressIndicator(number, ballEl) {
+        hidePressIndicator();
+        const rect = ballEl.getBoundingClientRect();
+        const indicator = document.createElement("div");
+        indicator.className = "sacks-press-indicator";
+        indicator.textContent = number;
+        indicator.style.left = `${rect.left + rect.width / 2}px`;
+        indicator.style.top = `${rect.top - 8}px`;
+        document.body.appendChild(indicator);
+        pressIndicatorEl = indicator;
+    }
+
+    function scheduleHidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+        }
+        pressIndicatorTimeout = setTimeout(hidePressIndicator, 180);
+    }
+
+    function appendHistoryChip(number) {
+        const chip = document.createElement("div");
+        chip.className = "sacks-history-chip";
+        chip.textContent = `${number}`;
+        chip.classList.add("sacks-history-chip--inc");
+        chip.dataset.number = String(number);
+        historyList.appendChild(chip);
+        chip.scrollIntoView({ block: "nearest", inline: "end" });
+    }
+
+    function removeLastHistoryChipFor(number) {
+        const target = String(number);
+        const chips = historyList.querySelectorAll(".sacks-history-chip--inc");
+        for (let i = chips.length - 1; i >= 0; i -= 1) {
+            if (chips[i].dataset.number === target) {
+                chips[i].remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function clearHistoryEntries() {
+        historyList.replaceChildren();
+    }
     
     // Create assessee balls
     assesseeNumbers.forEach(assesseeNumber => {
         const assesseeCard = document.createElement("div");
         assesseeCard.className = "assessee-card";
+        assesseeCard.classList.add("sacks-assessee-card");
         assesseeCard.dataset.number = assesseeNumber;
 
         const ball = document.createElement("div");
         ball.className = "assessee-ball";
+        ball.classList.add("sacks-assessee-ball");
         ball.textContent = assesseeNumber;
 
         const lapCounter = document.createElement("div");
         lapCounter.className = "lap-counter";
+        lapCounter.classList.add("sacks-lap-counter");
         lapCounter.textContent = stretcherData[assesseeNumber] || "0";
 
         // Interaction: tap to increment, long-press to show minus button
@@ -1356,6 +1436,7 @@ function stretcher(activityNumber){
             e.preventDefault();
             longPressTriggered = false;
             hideMinusButton(); // Hide any existing minus button
+            showPressIndicator(assesseeNumber, ball);
             
             pressTimer = setTimeout(() => {
                 longPressTriggered = true;
@@ -1380,6 +1461,7 @@ function stretcher(activityNumber){
                         actionStack.push({ number: assesseeNumber, delta: -1 });
                         updateUndoButtonState();
                         saveStretcherData();
+                        removeLastHistoryChipFor(assesseeNumber);
                     }
                     hideMinusButton();
                 });
@@ -1399,12 +1481,20 @@ function stretcher(activityNumber){
                 actionStack.push({ number: assesseeNumber, delta: +1 });
                 updateUndoButtonState();
                 saveStretcherData();
+                appendHistoryChip(assesseeNumber);
             }
             clearPressTimer();
+            scheduleHidePressIndicator();
         });
 
-        ball.addEventListener("pointercancel", clearPressTimer);
-        ball.addEventListener("pointerleave", clearPressTimer);
+        ball.addEventListener("pointercancel", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
+        ball.addEventListener("pointerleave", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
 
         assesseeCard.appendChild(lapCounter);
         assesseeCard.appendChild(ball);
@@ -1415,6 +1505,8 @@ function stretcher(activityNumber){
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
         stopStopwatch();
+        hidePressIndicator();
+        clearHistoryEntries();
         stretcherContainer.remove();
         stopwatchWidget.remove();
         backButton.remove();
@@ -1439,6 +1531,8 @@ function stretcher(activityNumber){
             });
             actionStack.length = 0;
             updateUndoButtonState();
+            hidePressIndicator();
+            clearHistoryEntries();
             resetStopwatch();
         }
     });
@@ -1526,6 +1620,8 @@ function stretcher(activityNumber){
         });
         actionStack.length = 0;
         updateUndoButtonState();
+        hidePressIndicator();
+        clearHistoryEntries();
         resetStopwatch();
         
         const banner = document.querySelector(".activity-name-banner");

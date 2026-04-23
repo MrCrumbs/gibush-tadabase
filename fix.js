@@ -1233,34 +1233,105 @@ function stretcherResubmit(activityNumber){
         lapCounter.textContent = next.toString();
         saveStretcherData();
         updateUndoButtonState();
+        addHistoryEntry("undo", last.number);
     });
     actionsRow.insertBefore(undoButton, resetButton);
     
     // Create main container
     const stretcherContainer = document.createElement("div");
     stretcherContainer.className = "sacks-container";
+    stretcherContainer.classList.add("sacks-container--enhanced");
     initialElementFixGrades.appendChild(stretcherContainer);
     
     // Create grid for assessees
     const assesseesGrid = document.createElement("div");
     assesseesGrid.className = "assessees-grid";
+    assesseesGrid.classList.add("sacks-assessees-grid");
     stretcherContainer.appendChild(assesseesGrid);
+
+    const historySection = document.createElement("div");
+    historySection.className = "sacks-history-section";
+    const historyTitle = document.createElement("div");
+    historyTitle.className = "sacks-history-title";
+    historyTitle.textContent = "פעולות אחרונות";
+    const historyList = document.createElement("div");
+    historyList.className = "sacks-history-list";
+    historySection.appendChild(historyTitle);
+    historySection.appendChild(historyList);
+    stretcherContainer.appendChild(historySection);
     
     // Load existing data from localStorage
     const stretcherData = JSON.parse(localStorage.getItem("stretcherData") || "{}");
+
+    let pressIndicatorEl = null;
+    let pressIndicatorTimeout = null;
+
+    function hidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+            pressIndicatorTimeout = null;
+        }
+        if (pressIndicatorEl?.parentNode) {
+            pressIndicatorEl.remove();
+        }
+        pressIndicatorEl = null;
+    }
+
+    function showPressIndicator(number, ballEl) {
+        hidePressIndicator();
+        const rect = ballEl.getBoundingClientRect();
+        const indicator = document.createElement("div");
+        indicator.className = "sacks-press-indicator";
+        indicator.textContent = number;
+        indicator.style.left = `${rect.left + rect.width / 2}px`;
+        indicator.style.top = `${rect.top - 8}px`;
+        document.body.appendChild(indicator);
+        pressIndicatorEl = indicator;
+    }
+
+    function scheduleHidePressIndicator() {
+        if (pressIndicatorTimeout) {
+            clearTimeout(pressIndicatorTimeout);
+        }
+        pressIndicatorTimeout = setTimeout(hidePressIndicator, 180);
+    }
+
+    function addHistoryEntry(type, number) {
+        const chip = document.createElement("div");
+        chip.className = "sacks-history-chip";
+        if (type === "inc") {
+            chip.textContent = `${number} +`;
+            chip.classList.add("sacks-history-chip--inc");
+        } else if (type === "dec") {
+            chip.textContent = `${number} -`;
+            chip.classList.add("sacks-history-chip--dec");
+        } else {
+            chip.textContent = `בטל ${number}`;
+            chip.classList.add("sacks-history-chip--undo");
+        }
+        historyList.appendChild(chip);
+        chip.scrollIntoView({ block: "nearest", inline: "end" });
+    }
+
+    function clearHistoryEntries() {
+        historyList.replaceChildren();
+    }
     
     // Create assessee balls
     assesseeNumbersFixGrades.forEach(assesseeNumber => {
         const assesseeCard = document.createElement("div");
         assesseeCard.className = "assessee-card";
+        assesseeCard.classList.add("sacks-assessee-card");
         assesseeCard.dataset.number = assesseeNumber;
 
         const ball = document.createElement("div");
         ball.className = "assessee-ball";
+        ball.classList.add("sacks-assessee-ball");
         ball.textContent = assesseeNumber;
 
         const lapCounter = document.createElement("div");
         lapCounter.className = "lap-counter";
+        lapCounter.classList.add("sacks-lap-counter");
         lapCounter.textContent = stretcherData[assesseeNumber] || "0";
 
         // Interaction: tap to increment, long-press to show minus button
@@ -1286,6 +1357,7 @@ function stretcherResubmit(activityNumber){
             e.preventDefault();
             longPressTriggered = false;
             hideMinusButton(); // Hide any existing minus button
+            showPressIndicator(assesseeNumber, ball);
             
             pressTimer = setTimeout(() => {
                 longPressTriggered = true;
@@ -1310,6 +1382,7 @@ function stretcherResubmit(activityNumber){
                         actionStack.push({ number: assesseeNumber, delta: -1 });
                         updateUndoButtonState();
                         saveStretcherData();
+                        addHistoryEntry("dec", assesseeNumber);
                     }
                     hideMinusButton();
                 });
@@ -1329,12 +1402,20 @@ function stretcherResubmit(activityNumber){
                 actionStack.push({ number: assesseeNumber, delta: +1 });
                 updateUndoButtonState();
                 saveStretcherData();
+                addHistoryEntry("inc", assesseeNumber);
             }
             clearPressTimer();
+            scheduleHidePressIndicator();
         });
 
-        ball.addEventListener("pointercancel", clearPressTimer);
-        ball.addEventListener("pointerleave", clearPressTimer);
+        ball.addEventListener("pointercancel", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
+        ball.addEventListener("pointerleave", () => {
+            clearPressTimer();
+            scheduleHidePressIndicator();
+        });
 
         assesseeCard.appendChild(lapCounter);
         assesseeCard.appendChild(ball);
@@ -1344,6 +1425,8 @@ function stretcherResubmit(activityNumber){
     // Back button event
     backButton.addEventListener("click", () => {
         // Remove all created elements after initialElement
+        hidePressIndicator();
+        clearHistoryEntries();
         stretcherContainer.remove();
         backButton.remove();
         topButtonContainer.remove();
@@ -1364,6 +1447,8 @@ function stretcherResubmit(activityNumber){
             });
             actionStack.length = 0;
             updateUndoButtonState();
+            hidePressIndicator();
+            clearHistoryEntries();
         }
     });
     
@@ -1405,6 +1490,8 @@ function stretcherResubmit(activityNumber){
             // Wait 2 seconds before going back to activities list so user can see the success message
             setTimeout(() => {
                 // Remove all created elements after initialElement
+                hidePressIndicator();
+                clearHistoryEntries();
                 stretcherContainer.remove();
                 backButton.remove();
                 topButtonContainer.remove();

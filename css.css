@@ -1199,7 +1199,7 @@ body {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Sacks enhanced UX (scoped to sacks only) */
+/* Enhanced lap UI (sacks + stretcher; .sacks-container--enhanced) */
 .sacks-container--enhanced .sacks-assessees-grid {
     gap: 16px 14px;
 }
