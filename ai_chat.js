@@ -1,17 +1,18 @@
 /**
- * Gibush AI chat widget - floating button + multi-turn chat panel that talks
- * to POST /gibush_ai_ask on the misc backend.
+ * Gibush AI chat - full-page ChatGPT-style panel embedded into the Tadabase
+ * page's <article> (or the empty HTML component inside it). Talks to
+ * POST /gibush_ai_ask on the misc backend.
  *
- * Paste this (and ai_chat.css, inlined below via ensureGibushAiChatStyles) on
- * any Tadabase gibush page, or a dedicated page. It renders a floating "שאל
- * את ה-AI" button; clicking it opens a chat panel.
+ * Paste this on a dedicated Tadabase page. Typical wrapper:
  *
- * SCOPING: set GIBUSH_AI_CHAT_TEAM_NUMBER below.
- *   - On a page meant for one field team (mirrors currentTeamNumber in
- *     js.js/grades.js/etc.): leave it as "{loggedInUser.צוות שטח}" so every
- *     question is scoped server-side to that team.
- *   - On a commander/admin page meant to see everything (mirrors the "all"
- *     used in "grades commander.js"/"graphs commander.js"): set it to null.
+ *   TB.render("component_3", async function (data) {
+ *       ensureGibushAiChatWidget();
+ *   });
+ *
+ * SCOPING: set GIBUSH_AI_CHAT_SCOPED_MODE below.
+ *   - true  (field-team page): also set GIBUSH_AI_CHAT_TEAM_NUMBER (usually
+ *     "{loggedInUser.צוות שטח}") — every question is scoped to that team.
+ *   - false (commander/admin page): team number is ignored; full access.
  *
  * EXPENSIVE MODEL: the "$" toggle next to Send arms the next turn(s) to use
  * OPENAI_MODEL_GIBUSH_AGENT_EXPENSIVE (gpt-5.6-sol) instead of the default
@@ -26,13 +27,19 @@
 var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var MISC_API_BASE = "https://misc-ten.vercel.app";
 
-// Set to null on commander/unscoped pages - see comment above.
+// true = field-team page (scoped). false = commander/admin (no limits).
+var GIBUSH_AI_CHAT_SCOPED_MODE = false;
+
+// Only used when GIBUSH_AI_CHAT_SCOPED_MODE is true.
 var GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}";
 
 var GIBUSH_AI_CHAT_STORAGE_KEY = "gibushAiChat_previousResponseId";
 var GIBUSH_AI_CHAT_HISTORY_KEY = "gibushAiChat_history";
 
 function gibushAiChatResolvedTeamNumber() {
+    if (!GIBUSH_AI_CHAT_SCOPED_MODE) {
+        return null;
+    }
     var raw = (GIBUSH_AI_CHAT_TEAM_NUMBER == null) ? "" : String(GIBUSH_AI_CHAT_TEAM_NUMBER).trim();
     // Tadabase leaves the literal "{loggedInUser...}" merge-field text in place
     // if it fails to resolve (e.g. previewed outside a real session) - treat
@@ -43,6 +50,21 @@ function gibushAiChatResolvedTeamNumber() {
     return raw;
 }
 
+/**
+ * Prefer the empty HTML component Tadabase places inside <article>, else the
+ * article itself, else body. That matches pages that host the script via
+ * TB.render("component_3", ...) on an af-html element.
+ */
+function gibushAiChatFindMount() {
+    var article = document.querySelector("article");
+    if (article) {
+        var htmlEle = article.querySelector(".x-type-html.t-html") || article.querySelector(".x-type-html");
+        if (htmlEle) return htmlEle;
+        return article;
+    }
+    return document.querySelector(".x-type-html.t-html") || document.body;
+}
+
 function ensureGibushAiChatStyles() {
     var style = document.getElementById("gibush-ai-chat-styles");
     if (!style) {
@@ -51,37 +73,42 @@ function ensureGibushAiChatStyles() {
         document.head.appendChild(style);
     }
     style.textContent =
-        '#gibush-ai-chat-fab{position:fixed;bottom:22px;left:22px;z-index:10040;width:auto;height:44px;padding:0 18px;border-radius:22px;border:none;background:#2d3748;color:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,"Noto Sans Hebrew",sans-serif;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.22);}' +
-        '#gibush-ai-chat-fab:hover{background:#1a202c;}' +
-        '#gibush-ai-chat-panel{display:none;position:fixed;bottom:78px;left:22px;z-index:10041;width:380px;max-width:92vw;height:520px;max-height:78vh;background:#fff;border-radius:12px;box-shadow:0 16px 48px rgba(0,0,0,0.24);border:1px solid #e2e4e8;flex-direction:column;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,"Noto Sans Hebrew",sans-serif;font-size:14px;line-height:1.45;color:#1a1d21;}' +
-        '#gibush-ai-chat-panel.gaic-open{display:flex;}' +
-        '#gibush-ai-chat-panel .gaic-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid #e2e4e8;background:#f6f7f9;}' +
-        '#gibush-ai-chat-panel .gaic-head h2{margin:0;font-size:14px;font-weight:700;}' +
-        '#gibush-ai-chat-panel .gaic-head-actions{display:flex;gap:6px;align-items:center;}' +
-        '#gibush-ai-chat-panel .gaic-head-actions button{border:1px solid #d8d8d8;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;padding:5px 9px;color:#333;}' +
-        '#gibush-ai-chat-panel .gaic-head-actions button:hover{background:#eceef2;}' +
-        '#gibush-ai-chat-panel .gaic-scope-line{padding:4px 14px 0;font-size:11px;color:#8a8f98;}' +
-        '#gibush-ai-chat-messages{flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;background:#fbfbfc;}' +
-        '#gibush-ai-chat-messages .gaic-msg{max-width:88%;padding:9px 12px;border-radius:10px;white-space:pre-wrap;word-break:break-word;}' +
-        '#gibush-ai-chat-messages .gaic-msg-user{align-self:flex-end;background:#2d3748;color:#fff;border-bottom-left-radius:2px;}' +
-        '#gibush-ai-chat-messages .gaic-msg-assistant{align-self:flex-start;background:#eef0f3;color:#1a1d21;border-bottom-right-radius:2px;}' +
-        '#gibush-ai-chat-messages .gaic-msg-error{align-self:flex-start;background:#fde8e8;color:#8a1c1c;}' +
-        '#gibush-ai-chat-messages .gaic-msg-trace{align-self:flex-start;font-size:11px;color:#8a8f98;background:none;padding:0 4px;}' +
-        '#gibush-ai-chat-panel .gaic-spin-line{display:none;align-items:center;gap:8px;padding:0 14px 8px;font-size:12px;color:#5c5c5c;}' +
-        '#gibush-ai-chat-panel .gaic-spinner{width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#374151;border-radius:50%;animation:gaic-spin 0.7s linear infinite;flex-shrink:0;}' +
+        'article:has(#gibush-ai-chat-root), .x-type-html:has(#gibush-ai-chat-root){padding:0 !important;}' +
+        '#gibush-ai-chat-root{--gaic-bg:#f7f7f8;--gaic-panel:#ffffff;--gaic-border:#e5e5e5;--gaic-text:#0d0d0d;--gaic-muted:#6b6b6b;--gaic-user:#2d3748;--gaic-assistant:#f4f4f4;display:flex;justify-content:center;width:100%;min-height:calc(100vh - 120px);background:var(--gaic-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,"Noto Sans Hebrew",sans-serif;font-size:16px;line-height:1.55;color:var(--gaic-text);box-sizing:border-box;}' +
+        '#gibush-ai-chat-root *,#gibush-ai-chat-root *::before,#gibush-ai-chat-root *::after{box-sizing:border-box;}' +
+        '#gibush-ai-chat-shell{display:flex;flex-direction:column;width:100%;max-width:820px;min-height:calc(100vh - 120px);background:var(--gaic-panel);border-inline:1px solid var(--gaic-border);}' +
+        '#gibush-ai-chat-shell .gaic-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-bottom:1px solid var(--gaic-border);background:var(--gaic-panel);position:sticky;top:0;z-index:2;}' +
+        '#gibush-ai-chat-shell .gaic-head h2{margin:0;font-size:17px;font-weight:700;}' +
+        '#gibush-ai-chat-shell .gaic-head-meta{display:flex;align-items:center;gap:10px;}' +
+        '#gibush-ai-chat-shell .gaic-scope-line{font-size:12px;color:var(--gaic-muted);}' +
+        '#gibush-ai-chat-shell .gaic-head-actions button{border:1px solid var(--gaic-border);background:#fff;border-radius:8px;font-size:13px;cursor:pointer;padding:7px 12px;color:#333;}' +
+        '#gibush-ai-chat-shell .gaic-head-actions button:hover{background:#f0f0f0;}' +
+        '#gibush-ai-chat-messages{flex:1;overflow-y:auto;padding:28px 20px 12px;display:flex;flex-direction:column;gap:18px;background:var(--gaic-panel);}' +
+        '#gibush-ai-chat-messages .gaic-empty{margin:auto;max-width:520px;text-align:center;color:var(--gaic-muted);padding:40px 16px;}' +
+        '#gibush-ai-chat-messages .gaic-empty h3{margin:0 0 8px;font-size:26px;font-weight:700;color:var(--gaic-text);}' +
+        '#gibush-ai-chat-messages .gaic-empty p{margin:0;font-size:15px;line-height:1.5;}' +
+        '#gibush-ai-chat-messages .gaic-msg{max-width:min(720px,100%);padding:14px 16px;border-radius:16px;white-space:pre-wrap;word-break:break-word;text-align:right;}' +
+        /* Physical margins so RTL dir on the shell does not flip chat sides. Hebrew: user=right, AI=left. */ +
+        '#gibush-ai-chat-messages .gaic-msg-user{margin-left:auto;margin-right:0;background:var(--gaic-user);color:#fff;border-bottom-left-radius:4px;}' +
+        '#gibush-ai-chat-messages .gaic-msg-assistant{margin-right:auto;margin-left:0;background:var(--gaic-assistant);color:var(--gaic-text);border-bottom-right-radius:4px;}' +
+        '#gibush-ai-chat-messages .gaic-msg-error{margin-right:auto;margin-left:0;background:#fde8e8;color:#8a1c1c;}' +
+        '#gibush-ai-chat-messages .gaic-msg-trace{margin-right:auto;margin-left:0;font-size:12px;color:var(--gaic-muted);background:none;padding:0 6px;}' +
+        '#gibush-ai-chat-shell .gaic-composer{position:sticky;bottom:0;padding:12px 20px 20px;background:linear-gradient(to top,var(--gaic-panel) 70%,rgba(255,255,255,0));}' +
+        '#gibush-ai-chat-shell .gaic-spin-line{display:none;align-items:center;gap:8px;padding:0 4px 10px;font-size:13px;color:var(--gaic-muted);}' +
+        '#gibush-ai-chat-shell .gaic-spinner{width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#374151;border-radius:50%;animation:gaic-spin 0.7s linear infinite;flex-shrink:0;}' +
         '@keyframes gaic-spin{to{transform:rotate(360deg);}}' +
-        '#gibush-ai-chat-panel .gaic-input-row{display:flex;gap:8px;padding:10px;border-top:1px solid #e2e4e8;background:#fff;align-items:flex-end;}' +
-        '#gibush-ai-chat-panel textarea#gibush-ai-chat-input{flex:1;resize:none;min-height:38px;max-height:110px;padding:8px 10px;font-size:14px;font-family:inherit;border:1px solid #d8d8d8;border-radius:8px;box-sizing:border-box;}' +
-        '#gibush-ai-chat-panel textarea#gibush-ai-chat-input:focus{outline:none;border-color:#6b7280;box-shadow:0 0 0 2px rgba(107,114,128,0.15);}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-expensive{border:1px solid #d8d8d8;background:#fff;color:#5c5c5c;border-radius:8px;min-width:38px;height:38px;padding:0 10px;font-size:16px;font-weight:700;cursor:pointer;line-height:1;flex-shrink:0;}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-expensive:hover{background:#eceef2;}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-expensive.gaic-expensive-on{background:#2d3748;border-color:#2d3748;color:#f6e05e;}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-expensive.gaic-expensive-on:hover{background:#1a202c;}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-expensive:disabled{opacity:0.55;cursor:wait;}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-send{border:none;background:#2d3748;color:#fff;border-radius:8px;padding:0 16px;height:38px;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0;}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-send:hover{background:#1a202c;}' +
-        '#gibush-ai-chat-panel button#gibush-ai-chat-send:disabled{opacity:0.55;cursor:wait;}' +
-        '#gibush-ai-chat-messages .gaic-msg-user.gaic-expensive-msg::before{content:"$ ";opacity:0.75;font-weight:700;}';
+        '#gibush-ai-chat-shell .gaic-input-row{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border:1px solid var(--gaic-border);border-radius:18px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.06);}' +
+        '#gibush-ai-chat-shell textarea#gibush-ai-chat-input{flex:1;resize:none;min-height:44px;max-height:160px;padding:10px 8px;font-size:15px;font-family:inherit;border:none;outline:none;background:transparent;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive{border:1px solid var(--gaic-border);background:#fff;color:#5c5c5c;border-radius:10px;min-width:40px;height:40px;padding:0 10px;font-size:16px;font-weight:700;cursor:pointer;line-height:1;flex-shrink:0;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive:hover{background:#f0f0f0;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive.gaic-expensive-on{background:#2d3748;border-color:#2d3748;color:#f6e05e;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive.gaic-expensive-on:hover{background:#1a202c;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive:disabled{opacity:0.55;cursor:wait;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-send{border:none;background:#2d3748;color:#fff;border-radius:10px;padding:0 18px;height:40px;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-send:hover{background:#1a202c;}' +
+        '#gibush-ai-chat-shell button#gibush-ai-chat-send:disabled{opacity:0.55;cursor:wait;}' +
+        '#gibush-ai-chat-messages .gaic-msg-user.gaic-expensive-msg::before{content:"$ ";opacity:0.75;font-weight:700;}' +
+        '@media (max-width:720px){#gibush-ai-chat-root{min-height:calc(100vh - 80px);}#gibush-ai-chat-shell{min-height:calc(100vh - 80px);border-inline:none;}#gibush-ai-chat-shell .gaic-head{padding:12px 14px;}#gibush-ai-chat-messages{padding:20px 14px 8px;}#gibush-ai-chat-shell .gaic-composer{padding:10px 12px 14px;}}';
 }
 
 function gibushAiChatLoadHistory() {
@@ -102,13 +129,45 @@ function gibushAiChatSaveHistory(history) {
     }
 }
 
+function gibushAiChatRenderEmpty(container) {
+    var empty = document.createElement("div");
+    empty.className = "gaic-empty";
+    empty.id = "gibush-ai-chat-empty";
+    empty.innerHTML = "<h3>שאל את ה-AI</h3><p>שאל על מוערכים, ציונים, ראיונות, הערכות שטח או מחזורים קודמים.</p>";
+    container.appendChild(empty);
+}
+
+function gibushAiChatClearEmpty(container) {
+    var empty = container.querySelector("#gibush-ai-chat-empty");
+    if (empty) empty.remove();
+}
+
+function gibushAiChatEscapeHtml(text) {
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+/** Escape HTML, then turn **bold** into <strong>. Safe for model/user text. */
+function gibushAiChatFormatMarkdown(text) {
+    var escaped = gibushAiChatEscapeHtml(text == null ? "" : text);
+    return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
 function gibushAiChatRenderMessage(container, message) {
+    gibushAiChatClearEmpty(container);
     var el = document.createElement("div");
     el.className = "gaic-msg gaic-msg-" + (message.role || "assistant");
     if (message.role === "user" && message.expensive) {
         el.className += " gaic-expensive-msg";
     }
-    el.textContent = message.text || "";
+    if (message.role === "assistant") {
+        el.innerHTML = gibushAiChatFormatMarkdown(message.text || "");
+    } else {
+        el.textContent = message.text || "";
+    }
     container.appendChild(el);
     if (message.role === "assistant" && message.toolCallsMade && message.toolCallsMade.length) {
         var trace = document.createElement("div");
@@ -131,50 +190,55 @@ function gibushAiChatNewConversation(messagesContainer) {
     } catch (e) { /* ignore */ }
     gibushAiChatSaveHistory([]);
     messagesContainer.innerHTML = "";
+    gibushAiChatRenderEmpty(messagesContainer);
 }
 
 function ensureGibushAiChatWidget() {
     ensureGibushAiChatStyles();
-    if (document.getElementById("gibush-ai-chat-fab")) return;
+    if (document.getElementById("gibush-ai-chat-root")) return;
 
-    var fab = document.createElement("button");
-    fab.type = "button";
-    fab.id = "gibush-ai-chat-fab";
-    fab.textContent = "שאל את ה-AI";
+    var mount = gibushAiChatFindMount();
+    var root = document.createElement("div");
+    root.id = "gibush-ai-chat-root";
 
-    var panel = document.createElement("div");
-    panel.id = "gibush-ai-chat-panel";
-    panel.setAttribute("dir", "rtl");
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-modal", "false");
-    panel.setAttribute("aria-labelledby", "gibush-ai-chat-title");
+    var shell = document.createElement("div");
+    shell.id = "gibush-ai-chat-shell";
+    shell.setAttribute("dir", "rtl");
+    shell.setAttribute("role", "region");
+    shell.setAttribute("aria-labelledby", "gibush-ai-chat-title");
 
     var head = document.createElement("div");
     head.className = "gaic-head";
+
+    var headLeft = document.createElement("div");
     var h2 = document.createElement("h2");
     h2.id = "gibush-ai-chat-title";
     h2.textContent = "שאל את ה-AI";
+    var scopeLine = document.createElement("div");
+    scopeLine.className = "gaic-scope-line";
+    var resolvedTeam = gibushAiChatResolvedTeamNumber();
+    scopeLine.textContent = resolvedTeam ? ("מרחב נתונים: צוות " + resolvedTeam) : "מרחב נתונים: כל הצוותים";
+    headLeft.appendChild(h2);
+    headLeft.appendChild(scopeLine);
+
+    var headMeta = document.createElement("div");
+    headMeta.className = "gaic-head-meta";
     var headActions = document.createElement("div");
     headActions.className = "gaic-head-actions";
     var newConvoBtn = document.createElement("button");
     newConvoBtn.type = "button";
     newConvoBtn.textContent = "שיחה חדשה";
-    var closeBtn = document.createElement("button");
-    closeBtn.type = "button";
-    closeBtn.innerHTML = "&times;";
-    closeBtn.setAttribute("aria-label", "סגור");
     headActions.appendChild(newConvoBtn);
-    headActions.appendChild(closeBtn);
-    head.appendChild(h2);
-    head.appendChild(headActions);
+    headMeta.appendChild(headActions);
 
-    var scopeLine = document.createElement("div");
-    scopeLine.className = "gaic-scope-line";
-    var resolvedTeam = gibushAiChatResolvedTeamNumber();
-    scopeLine.textContent = resolvedTeam ? ("היקף: צוות " + resolvedTeam) : "היקף: כל הצוותים";
+    head.appendChild(headLeft);
+    head.appendChild(headMeta);
 
     var messages = document.createElement("div");
     messages.id = "gibush-ai-chat-messages";
+
+    var composer = document.createElement("div");
+    composer.className = "gaic-composer";
 
     var spinLine = document.createElement("div");
     spinLine.className = "gaic-spin-line";
@@ -185,7 +249,8 @@ function ensureGibushAiChatWidget() {
     inputRow.className = "gaic-input-row";
     var textarea = document.createElement("textarea");
     textarea.id = "gibush-ai-chat-input";
-    textarea.placeholder = "לדוגמה: מה הציון הפיזי של מועמד 305?";
+    textarea.rows = 1;
+    textarea.placeholder = "שאל משהו על מוערך, צוות או מחזור…";
     var expensiveBtn = document.createElement("button");
     expensiveBtn.type = "button";
     expensiveBtn.id = "gibush-ai-chat-expensive";
@@ -204,14 +269,21 @@ function ensureGibushAiChatWidget() {
     inputRow.appendChild(expensiveBtn);
     inputRow.appendChild(sendBtn);
 
-    panel.appendChild(head);
-    panel.appendChild(scopeLine);
-    panel.appendChild(messages);
-    panel.appendChild(spinLine);
-    panel.appendChild(inputRow);
+    composer.appendChild(spinLine);
+    composer.appendChild(inputRow);
 
-    document.body.appendChild(fab);
-    document.body.appendChild(panel);
+    shell.appendChild(head);
+    shell.appendChild(messages);
+    shell.appendChild(composer);
+    root.appendChild(shell);
+
+    // Clear Tadabase's empty HTML shell content so the chat owns the area.
+    if (mount && mount !== document.body) {
+        mount.innerHTML = "";
+        mount.appendChild(root);
+    } else {
+        document.body.appendChild(root);
+    }
 
     var expensiveArmed = false;
     var spinLabel = spinLine.querySelector("span:last-child");
@@ -222,30 +294,30 @@ function ensureGibushAiChatWidget() {
         expensiveBtn.setAttribute("aria-pressed", expensiveArmed ? "true" : "false");
     }
 
-    // Restore persisted history on load.
+    function autosizeTextarea() {
+        textarea.style.height = "auto";
+        textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
+    }
+
     var history = gibushAiChatLoadHistory();
-    history.forEach(function (message) {
-        gibushAiChatRenderMessage(messages, message);
-    });
+    if (history.length) {
+        history.forEach(function (message) {
+            gibushAiChatRenderMessage(messages, message);
+        });
+    } else {
+        gibushAiChatRenderEmpty(messages);
+    }
     messages.scrollTop = messages.scrollHeight;
 
-    fab.addEventListener("click", function () {
-        panel.classList.toggle("gaic-open");
-        if (panel.classList.contains("gaic-open")) {
-            textarea.focus();
-            messages.scrollTop = messages.scrollHeight;
-        }
-    });
-    closeBtn.addEventListener("click", function () {
-        panel.classList.remove("gaic-open");
-    });
     newConvoBtn.addEventListener("click", function () {
         gibushAiChatNewConversation(messages);
         setExpensiveArmed(false);
+        textarea.focus();
     });
     expensiveBtn.addEventListener("click", function () {
         setExpensiveArmed(!expensiveArmed);
     });
+    textarea.addEventListener("input", autosizeTextarea);
 
     function sendMessage() {
         var question = (textarea.value || "").trim();
@@ -257,6 +329,7 @@ function ensureGibushAiChatWidget() {
         gibushAiChatSaveHistory(history);
         gibushAiChatRenderMessage(messages, { role: "user", text: question, expensive: useExpensive });
         textarea.value = "";
+        autosizeTextarea();
         messages.scrollTop = messages.scrollHeight;
 
         sendBtn.disabled = true;
@@ -340,6 +413,7 @@ function ensureGibushAiChatWidget() {
                 expensiveBtn.disabled = false;
                 spinLine.style.display = "none";
                 messages.scrollTop = messages.scrollHeight;
+                textarea.focus();
             });
     }
 
@@ -350,8 +424,12 @@ function ensureGibushAiChatWidget() {
             sendMessage();
         }
     });
+
+    textarea.focus();
 }
 
+// Auto-mount when the script loads outside TB.render; TB.render pages should
+// call ensureGibushAiChatWidget() themselves (idempotent if both run).
 if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", ensureGibushAiChatWidget);
 } else {
