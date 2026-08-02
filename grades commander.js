@@ -1,3 +1,4 @@
+var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var initialElementGrades = document.querySelector("article div[ui-view]");
 var engToHebTranslations = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
@@ -63,7 +64,8 @@ async function fetchGradesData(){
         const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data_for_grades", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
             body: JSON.stringify({
                 team_number: "all",

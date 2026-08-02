@@ -1,4 +1,5 @@
 var MISC_API_BASE = 'https://misc-ten.vercel.app';
+var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 
 /** Latest `data.records` from TB.render('component_3') — full values, not DOM / truncated text. */
 var assessorsSummaryRecordsCache = [];
@@ -203,7 +204,7 @@ function ensureAssessorsSummaryAiModal() {
 
             fetch(MISC_API_BASE + '/assessors_summary_ask', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + GIBUSH_API_TOKEN },
                 body: JSON.stringify({ question: question, rows: rows })
             })
                 .then(function (res) {

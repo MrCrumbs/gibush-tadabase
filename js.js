@@ -1,3 +1,4 @@
+var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var initialElement = null;
 var currentGame = null;
 var currentTeamNumber = "{loggedInUser.צוות שטח}";
@@ -66,7 +67,8 @@ async function syncActivityNumbers() {
         const response = await fetch("https://misc-ten.vercel.app/get_game_state_for_team", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
             body: JSON.stringify({
                 team_number: currentTeamNumber
@@ -428,7 +430,7 @@ function isSacksLocalRestoreUsable(sacksData) {
 async function fetchHolesSubmittedDataFromServer(heatNumber) {
     const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + GIBUSH_API_TOKEN },
         body: JSON.stringify({
             team_number: String(currentTeamNumber),
             activity_names: "holes",
@@ -458,7 +460,7 @@ async function fetchHolesSubmittedDataFromServer(heatNumber) {
 async function fetchSacksSubmittedDataFromServer(heatNumber) {
     const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + GIBUSH_API_TOKEN },
         body: JSON.stringify({
             team_number: String(currentTeamNumber),
             activity_names: "sacks",
@@ -487,7 +489,7 @@ async function resubmitActivity(currentTeamNumberArg, currentTeamIDArg, activity
     try {
         const response = await fetch("https://misc-ten.vercel.app/resubmit_activity", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "Authorization": "Bearer " + GIBUSH_API_TOKEN },
             body: JSON.stringify({
                 team_number: currentTeamNumberArg,
                 team_id: currentTeamIDArg,
@@ -2698,7 +2700,7 @@ async function fetchPreviousHeatRaceOrder(teamNumber, redisActivityName, previou
     const heatKey = String(previousHeatNumber);
     const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + GIBUSH_API_TOKEN },
         body: JSON.stringify({
             team_number: String(teamNumber),
             activity_names: redisActivityName,
@@ -2757,7 +2759,8 @@ async function submitActivity(currentTeamNumber, currentTeamID, activityName, ac
         const response = await fetch("https://misc-ten.vercel.app/submit_activity", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
             body: JSON.stringify({
                 team_number: currentTeamNumber,

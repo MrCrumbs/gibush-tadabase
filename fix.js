@@ -1,3 +1,4 @@
+var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var initialElementFixGrades = document.querySelector("article div[ui-view]");
 var currentTeamNumberFixGrades = "{loggedInUser.צוות שטח}";
 var currentTeamIDFixGrades = null;
@@ -111,7 +112,8 @@ async function loadExistingActivities() {
         const response = await fetch("https://misc-ten.vercel.app/get_game_state_for_team", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
             body: JSON.stringify({
                 team_number: currentTeamNumberFixGrades
@@ -289,7 +291,8 @@ async function resubmitActivity(currentTeamNumber, currentTeamID, activityName, 
         const response = await fetch("https://misc-ten.vercel.app/resubmit_activity", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
             body: JSON.stringify({
                 team_number: currentTeamNumber,
@@ -372,7 +375,8 @@ async function deleteActivity(activityName, activityNumber) {
         const response = await fetch("https://misc-ten.vercel.app/delete_activity", {
             method: "POST",
             headers: {
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
             body: JSON.stringify({
                 team_number: currentTeamNumberFixGrades,

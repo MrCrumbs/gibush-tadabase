@@ -1,3 +1,5 @@
+var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
+
 TB.render('component_10', function(data) {
     setTimeout(() => {
         $('.pull-left, .form-inline').addClass('pull-right').removeClass('pull-left').css("direction", "rtl");
@@ -79,7 +81,8 @@ async function updateAssessorRecord(assessorId, assessorNumber, value) {
         const response = await fetch('https://misc-ten.vercel.app/update_commander_comments', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + GIBUSH_API_TOKEN
             },
             body: JSON.stringify(payload)
         });
@@ -346,7 +349,8 @@ async function transcribeRecording(audioBlob) {
         const response = await fetch('https://misc-ten.vercel.app/transcribe_audio_assessors', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + GIBUSH_API_TOKEN
             },
             body: JSON.stringify(payload)
         });

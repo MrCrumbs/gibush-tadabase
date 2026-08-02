@@ -1,3 +1,4 @@
+var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var initialElementGraphs = document.querySelector("article div[ui-view]");
 var currentTeamNumberGraphs = "{loggedInUser.צוות שטח}";
 
@@ -12,7 +13,8 @@ TB.render("component_23", async function (data) {
     fetch("https://misc-ten.vercel.app/get_team_activity_data", {
         method: "POST",
         headers: {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + GIBUSH_API_TOKEN
         },
         body: JSON.stringify({
             team_number: "all",
