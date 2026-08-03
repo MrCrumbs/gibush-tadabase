@@ -3,7 +3,8 @@
  * page's <article> (or the empty HTML component inside it). Talks to
  * POST /gibush_ai_ask on the misc backend.
  *
- * Paste this on a dedicated Tadabase page. Typical wrapper:
+ * Paste this on a dedicated Tadabase page, and paste ai_chat.css into the
+ * page's Custom CSS (styles are not injected from this file). Typical wrapper:
  *
  *   TB.render("component_3", async function (data) {
  *       ensureGibushAiChatWidget();
@@ -18,6 +19,10 @@
  * OPENAI_MODEL_GIBUSH_AGENT_EXPENSIVE (gpt-5.6-sol) instead of the default
  * Terra model. Leave it off for routine questions; turn it on for hard
  * suitability / "why" investigations that need deeper reasoning.
+ *
+ * SCREENSHOTS: paste (Ctrl/Cmd+V) or use the paperclip to attach one image
+ * (png/jpeg/webp/gif). The client downscales before send; history keeps only
+ * a small thumbnail (full image is not stored in localStorage).
  *
  * Multi-turn state: the last OpenAI response_id is kept in localStorage
  * (per-browser) so follow-up questions continue the same conversation
@@ -34,7 +39,106 @@ var GIBUSH_AI_CHAT_SCOPED_MODE = false;
 var GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}";
 
 var GIBUSH_AI_CHAT_STORAGE_KEY = "gibushAiChat_previousResponseId";
+var GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY = "gibushAiChat_diagnosticResponseId";
 var GIBUSH_AI_CHAT_HISTORY_KEY = "gibushAiChat_history";
+
+// Client-side image limits before POST (server also validates).
+var GIBUSH_AI_CHAT_IMAGE_MAX_EDGE = 1600;
+var GIBUSH_AI_CHAT_IMAGE_THUMB_EDGE = 240;
+var GIBUSH_AI_CHAT_IMAGE_JPEG_QUALITY = 0.85;
+var GIBUSH_AI_CHAT_IMAGE_MAX_DATA_URL_CHARS = 3500000;
+var GIBUSH_AI_CHAT_IMAGE_ONLY_PLACEHOLDER =
+    "מה אתה רואה בתמונה? אם יש נתונים רלוונטיים לגיבוש — נתח אותם.";
+
+// Preset ids + Hebrew labels/task text for the visible bubble only.
+// Backend DIAGNOSTIC_TASKS.user_prompt (English) is authoritative for the model.
+var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
+    {
+        id: "instability",
+        label: "מי לא יציב?",
+        user_prompt:
+            "נתח את יציבות הביצועים של המועמדים הנמצאים בשליש העליון ובשליש האמצעי.\n" +
+            "התמקד בזחילות ובספרינטים ובדוק את השינוי במיקום היחסי בין כל שני מקצים סמוכים.\n" +
+            "זהה את שני המועמדים בעלי התנודתיות הגבוהה ביותר.\n" +
+            "אל תבחר מועמד בגלל נפילה בודדת. חפש דפוס חוזר של קפיצות משמעותיות, " +
+            "למשל מעבר מקדמת הקבוצה לחלקה האחורי וחזרה.\n" +
+            "עבור כל מועמד: הצג רצף מיקומים או דוגמאות עוקבות שממחישות את הזגזוג; " +
+            "ציין כמה פעמים הופיע שינוי חריף; קבע האם התנודתיות מופיעה בתרגיל אחד או בשניהם; " +
+            "הבחן בין חוסר יציבות מתמשך לבין משבר קצר ולאחריו התייצבות; " +
+            "נסח נקודת בדיקה אחת למגבש.\n" +
+            "דרג את שני המועמדים מהפחות יציב ליותר יציב."
+    },
+    {
+        id: "late_fade",
+        label: "מי נשחק בסוף?",
+        user_prompt:
+            "נתח את המועמדים בשליש העליון ובשליש האמצעי וחפש ירידה תפקודית ככל שהגיבוש מתקדם.\n" +
+            "השווה בין השליש הראשון לשליש האחרון בזחילות, בספרינטים ובאלונקה הסוציומטרית " +
+            "(אם פעילות זו כבר הושקה).\n" +
+            "זהה את שלושת המועמדים בעלי השחיקה המאוחרת המשמעותית ביותר.\n" +
+            "שחיקה יכולה להתבטא בירידה במיקום היחסי, במעבר מאלונקה או ג׳ריקן ל־FIRST או ל־0, " +
+            "ברצף תוצאות חלשות בשליש האחרון או במקצים חסרים בחלק המאוחר.\n" +
+            "עבור כל מועמד: הצג רמת ביצוע בתחילה ובסוף; כמת את גודל הירידה; " +
+            "ציין האם המשיך להשתתף אך ירד ברמה או גם החסיר מקצים; " +
+            "האם השחיקה בתרגיל אחד או במספר תרגילים; חומרה נמוכה/בינונית/גבוהה.\n" +
+            "אל תציג מועמד עם נפילה מאוחרת אחת בלבד ולאחריה התאוששות."
+    },
+    {
+        id: "recovery",
+        label: "מי התאושש?",
+        user_prompt:
+            "חפש בקרב המועמדים בשליש העליון ובשליש האמצעי מקרים של ירידה משמעותית " +
+            "ולאחריה חזרה יציבה לרמת ביצוע טובה יותר.\n" +
+            "זהה את שלושת המועמדים בעלי יכולת ההתאוששות הבולטת ביותר.\n" +
+            "התאוששות תיחשב רק כאשר הייתה נפילה ברורה או רצף חלש, לאחריה הופיעו לפחות " +
+            "שני מקצים רצופים טובים יותר, והשיפור לא נעלם מיד במקצה הבא.\n" +
+            "עבור כל מועמד: תאר את נקודת המשבר; הצג רצף מקצים לפני/במהלך/אחרי; " +
+            "כמה מקצים נדרשו להתאוששות; האם נשמרה הרמה עד סוף התרגיל; " +
+            "האם הופיעה ביותר מסוג מאמץ אחד; הבחן בין התאוששות מלאה/חלקית/רגעית.\n" +
+            "דרג לפי חוזק ההתאוששות, לא לפי הציון הכללי."
+    },
+    {
+        id: "hidden_risk",
+        label: "סיכון נסתר בצמרת",
+        user_prompt:
+            "נתח רק את המועמדים בשליש העליון.\n" +
+            "זהה עד שלושה מועמדים שהדירוג הכללי שלהם גבוה, אך בתוך דפוס הביצועים מופיע " +
+            "סיכון שאינו בולט בציון הכולל.\n" +
+            "חפש תנודתיות קיצונית, שחיקה בשליש האחרון, תחום חוזר אחד חלש משמעותית, " +
+            "מקצים חסרים, תוצאות שיא שמסתירות קריסות, או פער גדול בין סוגי מאמץ.\n" +
+            "עבור כל מועמד: הצג דירוג בשליש העליון; הסבר את הסיכון הנסתר; " +
+            "לפחות שני נתונים תומכים; מדוע הציון הכללי עלול להסתיר את הבעיה; " +
+            "סיכון נקודתי או דפוס חוזר; פעולה אחת למגבש לבדיקה.\n" +
+            "אל תבחר מועמד רק משום שאינו ראשון בצוות — נדרש דגל ברור ברצף הנתונים."
+    },
+    {
+        id: "mid_potential",
+        label: "פוטנציאל בשליש האמצעי",
+        user_prompt:
+            "נתח רק את המועמדים בשליש האמצעי.\n" +
+            "זהה את שלושת המועמדים בעלי הפוטנציאל הגבוה ביותר להערכה מחודשת, " +
+            "אף שאינם בשליש העליון.\n" +
+            "חפש מגמת שיפור, ביצוע טוב יותר בשליש האחרון, יציבות גבוהה ללא תוצאות שיא, " +
+            "התאוששות ברורה, אחידות בין סוגי מאמץ, או השתתפות ללא מקצים חסרים.\n" +
+            "עבור כל מועמד: מדוע הוא באמצע; הדפוס החיובי; האם השיפור בתרגיל אחד או במספר; " +
+            "נתונים מהשליש הראשון והאחרון; גורם מגביל אחד; מה לבדוק בהמשך.\n" +
+            "אל תבחר רק על בסיס תוצאה גבוהה בתרגיל חד־פעמי כמו שקים או אלונקה רגילה."
+    },
+    {
+        id: "balance",
+        label: "אחידות בין תרגילים",
+        user_prompt:
+            "השווה בין ביצועי המועמדים בשליש העליון ובשליש האמצעי בפעילויות שהושקו " +
+            "(זחילות, ספרינטים, אלונקה סוציומטרית, שקים, אלונקה רגילה — לפי הזמין).\n" +
+            "זהה את שני המועמדים בעלי הפרופיל האחיד והמאוזן ביותר ואת שני המועמדים " +
+            "בעלי הפערים הגדולים ביותר בין סוגי המאמץ.\n" +
+            "עבור כל מועמד: התחום החזק/החלש; גודל הפער; האם החולשה מרמה נמוכה / חוסר יציבות " +
+            "/ שחיקה / מקצים חסרים; האם החוזק מתרגיל חוזר או חד־פעמי; " +
+            "האם הפרופיל דומה גם בשליש האחרון.\n" +
+            "אל תאפשר לתוצאה גבוהה בשקים או באלונקה רגילה לבדה להגדיר מועמד כמאוזן — " +
+            "תן עדיפות לדפוס שחוזר בזחילות, בספרינטים ובאלונקה הסוציומטרית."
+    }
+];
 
 function gibushAiChatResolvedTeamNumber() {
     if (!GIBUSH_AI_CHAT_SCOPED_MODE) {
@@ -65,52 +169,6 @@ function gibushAiChatFindMount() {
     return document.querySelector(".x-type-html.t-html") || document.body;
 }
 
-function ensureGibushAiChatStyles() {
-    var style = document.getElementById("gibush-ai-chat-styles");
-    if (!style) {
-        style = document.createElement("style");
-        style.id = "gibush-ai-chat-styles";
-        document.head.appendChild(style);
-    }
-    style.textContent =
-        'article:has(#gibush-ai-chat-root), .x-type-html:has(#gibush-ai-chat-root){padding:0 !important;}' +
-        '#gibush-ai-chat-root{--gaic-bg:#f7f7f8;--gaic-panel:#ffffff;--gaic-border:#e5e5e5;--gaic-text:#0d0d0d;--gaic-muted:#6b6b6b;--gaic-user:#2d3748;--gaic-assistant:#f4f4f4;display:flex;justify-content:center;width:100%;min-height:calc(100vh - 120px);background:var(--gaic-bg);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,"Noto Sans Hebrew",sans-serif;font-size:16px;line-height:1.55;color:var(--gaic-text);box-sizing:border-box;}' +
-        '#gibush-ai-chat-root *,#gibush-ai-chat-root *::before,#gibush-ai-chat-root *::after{box-sizing:border-box;}' +
-        '#gibush-ai-chat-shell{display:flex;flex-direction:column;width:100%;max-width:820px;min-height:calc(100vh - 120px);background:var(--gaic-panel);border-inline:1px solid var(--gaic-border);}' +
-        '#gibush-ai-chat-shell .gaic-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-bottom:1px solid var(--gaic-border);background:var(--gaic-panel);position:sticky;top:0;z-index:2;}' +
-        '#gibush-ai-chat-shell .gaic-head h2{margin:0;font-size:17px;font-weight:700;}' +
-        '#gibush-ai-chat-shell .gaic-head-meta{display:flex;align-items:center;gap:10px;}' +
-        '#gibush-ai-chat-shell .gaic-scope-line{font-size:12px;color:var(--gaic-muted);}' +
-        '#gibush-ai-chat-shell .gaic-head-actions button{border:1px solid var(--gaic-border);background:#fff;border-radius:8px;font-size:13px;cursor:pointer;padding:7px 12px;color:#333;}' +
-        '#gibush-ai-chat-shell .gaic-head-actions button:hover{background:#f0f0f0;}' +
-        '#gibush-ai-chat-messages{flex:1;overflow-y:auto;padding:28px 20px 12px;display:flex;flex-direction:column;gap:18px;background:var(--gaic-panel);}' +
-        '#gibush-ai-chat-messages .gaic-empty{margin:auto;max-width:520px;text-align:center;color:var(--gaic-muted);padding:40px 16px;}' +
-        '#gibush-ai-chat-messages .gaic-empty h3{margin:0 0 8px;font-size:26px;font-weight:700;color:var(--gaic-text);}' +
-        '#gibush-ai-chat-messages .gaic-empty p{margin:0;font-size:15px;line-height:1.5;}' +
-        '#gibush-ai-chat-messages .gaic-msg{max-width:min(720px,100%);padding:14px 16px;border-radius:16px;white-space:pre-wrap;word-break:break-word;text-align:right;}' +
-        /* Physical margins so RTL dir on the shell does not flip chat sides. Hebrew: user=right, AI=left. */ +
-        '#gibush-ai-chat-messages .gaic-msg-user{margin-left:auto;margin-right:0;background:var(--gaic-user);color:#fff;border-bottom-left-radius:4px;}' +
-        '#gibush-ai-chat-messages .gaic-msg-assistant{margin-right:auto;margin-left:0;background:var(--gaic-assistant);color:var(--gaic-text);border-bottom-right-radius:4px;}' +
-        '#gibush-ai-chat-messages .gaic-msg-error{margin-right:auto;margin-left:0;background:#fde8e8;color:#8a1c1c;}' +
-        '#gibush-ai-chat-messages .gaic-msg-trace{margin-right:auto;margin-left:0;font-size:12px;color:var(--gaic-muted);background:none;padding:0 6px;}' +
-        '#gibush-ai-chat-shell .gaic-composer{position:sticky;bottom:0;padding:12px 20px 20px;background:linear-gradient(to top,var(--gaic-panel) 70%,rgba(255,255,255,0));}' +
-        '#gibush-ai-chat-shell .gaic-spin-line{display:none;align-items:center;gap:8px;padding:0 4px 10px;font-size:13px;color:var(--gaic-muted);}' +
-        '#gibush-ai-chat-shell .gaic-spinner{width:16px;height:16px;border:2px solid #e5e7eb;border-top-color:#374151;border-radius:50%;animation:gaic-spin 0.7s linear infinite;flex-shrink:0;}' +
-        '@keyframes gaic-spin{to{transform:rotate(360deg);}}' +
-        '#gibush-ai-chat-shell .gaic-input-row{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border:1px solid var(--gaic-border);border-radius:18px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,0.06);}' +
-        '#gibush-ai-chat-shell textarea#gibush-ai-chat-input{flex:1;resize:none;min-height:44px;max-height:160px;padding:10px 8px;font-size:15px;font-family:inherit;border:none;outline:none;background:transparent;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive{border:1px solid var(--gaic-border);background:#fff;color:#5c5c5c;border-radius:10px;min-width:40px;height:40px;padding:0 10px;font-size:16px;font-weight:700;cursor:pointer;line-height:1;flex-shrink:0;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive:hover{background:#f0f0f0;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive.gaic-expensive-on{background:#2d3748;border-color:#2d3748;color:#f6e05e;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive.gaic-expensive-on:hover{background:#1a202c;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-expensive:disabled{opacity:0.55;cursor:wait;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-send{border:none;background:#2d3748;color:#fff;border-radius:10px;padding:0 18px;height:40px;font-size:14px;font-weight:600;cursor:pointer;flex-shrink:0;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-send:hover{background:#1a202c;}' +
-        '#gibush-ai-chat-shell button#gibush-ai-chat-send:disabled{opacity:0.55;cursor:wait;}' +
-        '#gibush-ai-chat-messages .gaic-msg-user.gaic-expensive-msg::before{content:"$ ";opacity:0.75;font-weight:700;}' +
-        '@media (max-width:720px){#gibush-ai-chat-root{min-height:calc(100vh - 80px);}#gibush-ai-chat-shell{min-height:calc(100vh - 80px);border-inline:none;}#gibush-ai-chat-shell .gaic-head{padding:12px 14px;}#gibush-ai-chat-messages{padding:20px 14px 8px;}#gibush-ai-chat-shell .gaic-composer{padding:10px 12px 14px;}}';
-}
-
 function gibushAiChatLoadHistory() {
     try {
         var raw = localStorage.getItem(GIBUSH_AI_CHAT_HISTORY_KEY);
@@ -121,19 +179,156 @@ function gibushAiChatLoadHistory() {
     }
 }
 
+function gibushAiChatHistoryForStorage(history) {
+    // Never persist full screenshot payloads — thumbs only.
+    if (!Array.isArray(history)) return [];
+    return history.map(function (message) {
+        if (!message || typeof message !== "object") return message;
+        var copy = {};
+        Object.keys(message).forEach(function (key) {
+            if (key === "image") return;
+            copy[key] = message[key];
+        });
+        return copy;
+    });
+}
+
 function gibushAiChatSaveHistory(history) {
     try {
-        localStorage.setItem(GIBUSH_AI_CHAT_HISTORY_KEY, JSON.stringify(history));
+        localStorage.setItem(
+            GIBUSH_AI_CHAT_HISTORY_KEY,
+            JSON.stringify(gibushAiChatHistoryForStorage(history))
+        );
     } catch (e) {
-        // localStorage full/unavailable - chat still works, just won't persist across reloads.
+        // localStorage full/unavailable - drop thumbs and retry once.
+        try {
+            var slim = gibushAiChatHistoryForStorage(history).map(function (message) {
+                if (!message || typeof message !== "object") return message;
+                var copy = {};
+                Object.keys(message).forEach(function (key) {
+                    if (key === "image" || key === "image_thumb") return;
+                    copy[key] = message[key];
+                });
+                if (message.image_thumb || message.image) {
+                    copy.has_image = true;
+                }
+                return copy;
+            });
+            localStorage.setItem(GIBUSH_AI_CHAT_HISTORY_KEY, JSON.stringify(slim));
+        } catch (e2) {
+            // chat still works for the session
+        }
     }
+}
+
+function gibushAiChatLoadImageElement(dataUrl) {
+    return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () { resolve(img); };
+        img.onerror = function () { reject(new Error("לא ניתן לקרוא את התמונה")); };
+        img.src = dataUrl;
+    });
+}
+
+function gibushAiChatCanvasToJpegDataUrl(img, maxEdge, quality) {
+    var w = img.naturalWidth || img.width || 0;
+    var h = img.naturalHeight || img.height || 0;
+    if (!w || !h) {
+        throw new Error("תמונה לא תקינה");
+    }
+    var scale = 1;
+    var longest = Math.max(w, h);
+    if (longest > maxEdge) {
+        scale = maxEdge / longest;
+    }
+    var cw = Math.max(1, Math.round(w * scale));
+    var ch = Math.max(1, Math.round(h * scale));
+    var canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    var ctx = canvas.getContext("2d");
+    if (!ctx) {
+        throw new Error("לא ניתן לעבד תמונה בדפדפן זה");
+    }
+    ctx.drawImage(img, 0, 0, cw, ch);
+    return canvas.toDataURL("image/jpeg", quality);
+}
+
+function gibushAiChatProcessImageBlob(blob) {
+    return new Promise(function (resolve, reject) {
+        if (!blob || !blob.type || blob.type.indexOf("image/") !== 0) {
+            reject(new Error("ניתן לצרף רק תמונות (png / jpeg / webp / gif)"));
+            return;
+        }
+        var allowed = {
+            "image/png": true,
+            "image/jpeg": true,
+            "image/jpg": true,
+            "image/webp": true,
+            "image/gif": true
+        };
+        if (!allowed[blob.type]) {
+            reject(new Error("סוג תמונה לא נתמך"));
+            return;
+        }
+        var reader = new FileReader();
+        reader.onerror = function () {
+            reject(new Error("קריאת הקובץ נכשלה"));
+        };
+        reader.onload = function () {
+            var rawDataUrl = reader.result;
+            gibushAiChatLoadImageElement(rawDataUrl)
+                .then(function (img) {
+                    var dataUrl = gibushAiChatCanvasToJpegDataUrl(
+                        img,
+                        GIBUSH_AI_CHAT_IMAGE_MAX_EDGE,
+                        GIBUSH_AI_CHAT_IMAGE_JPEG_QUALITY
+                    );
+                    if (dataUrl.length > GIBUSH_AI_CHAT_IMAGE_MAX_DATA_URL_CHARS) {
+                        throw new Error("התמונה גדולה מדי גם לאחר כיווץ — נסה צילום מסך ממוקד יותר");
+                    }
+                    var thumbDataUrl = gibushAiChatCanvasToJpegDataUrl(
+                        img,
+                        GIBUSH_AI_CHAT_IMAGE_THUMB_EDGE,
+                        0.7
+                    );
+                    resolve({ dataUrl: dataUrl, thumbDataUrl: thumbDataUrl });
+                })
+                .catch(reject);
+        };
+        reader.readAsDataURL(blob);
+    });
+}
+
+function gibushAiChatDiagnosticsEnabled() {
+    // Preset chips are for the unscoped commander/admin page only.
+    return !GIBUSH_AI_CHAT_SCOPED_MODE;
+}
+
+function gibushAiChatLastAssistantMessage(history) {
+    if (!Array.isArray(history)) return null;
+    for (var i = history.length - 1; i >= 0; i--) {
+        if (history[i] && history[i].role === "assistant") {
+            return history[i];
+        }
+    }
+    return null;
 }
 
 function gibushAiChatRenderEmpty(container) {
     var empty = document.createElement("div");
     empty.className = "gaic-empty";
     empty.id = "gibush-ai-chat-empty";
-    empty.innerHTML = "<h3>שאל את ה-AI</h3><p>שאל על מוערכים, ציונים, ראיונות, הערכות שטח או מחזורים קודמים.</p>";
+    empty.innerHTML =
+        "<h3>שאל את ה-AI</h3>" +
+        "<p>שאל על מוערכים, ציונים, ראיונות, הערכות שטח או מחזורים קודמים. " +
+        "אפשר גם להדביק צילום מסך (Ctrl+V) או לצרף תמונה.</p>";
+    if (gibushAiChatDiagnosticsEnabled()) {
+        var chipHost = document.createElement("div");
+        chipHost.className = "gaic-preset-row gaic-preset-empty";
+        chipHost.setAttribute("data-gaic-preset-host", "empty");
+        empty.appendChild(chipHost);
+    }
     container.appendChild(empty);
 }
 
@@ -151,9 +346,100 @@ function gibushAiChatEscapeHtml(text) {
 }
 
 /** Escape HTML, then turn **bold** into <strong>. Safe for model/user text. */
-function gibushAiChatFormatMarkdown(text) {
+function gibushAiChatFormatInlineMarkdown(text) {
     var escaped = gibushAiChatEscapeHtml(text == null ? "" : text);
     return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+function gibushAiChatIsMarkdownTableSeparator(line) {
+    var trimmed = String(line || "").trim();
+    if (!trimmed || trimmed.indexOf("|") === -1) return false;
+    // GFM separator: |---|:---| or ---|---
+    var body = trimmed.replace(/^\|/, "").replace(/\|$/, "");
+    var cells = body.split("|");
+    if (cells.length < 2) return false;
+    for (var i = 0; i < cells.length; i++) {
+        if (!/^:?-{3,}:?$/.test(cells[i].trim())) return false;
+    }
+    return true;
+}
+
+function gibushAiChatIsMarkdownTableRow(line) {
+    var trimmed = String(line || "").trim();
+    if (!trimmed || trimmed.indexOf("|") === -1) return false;
+    if (gibushAiChatIsMarkdownTableSeparator(trimmed)) return false;
+    return trimmed.charAt(0) === "|" || trimmed.charAt(trimmed.length - 1) === "|";
+}
+
+function gibushAiChatSplitMarkdownTableCells(line) {
+    var trimmed = String(line || "").trim();
+    if (trimmed.charAt(0) === "|") trimmed = trimmed.slice(1);
+    if (trimmed.charAt(trimmed.length - 1) === "|") trimmed = trimmed.slice(0, -1);
+    return trimmed.split("|").map(function (cell) {
+        return cell.trim();
+    });
+}
+
+function gibushAiChatRenderMarkdownTable(rows) {
+    if (!rows || rows.length < 2) return "";
+    var header = rows[0];
+    var body = rows.slice(1);
+    var html = '<div class="gaic-table-wrap"><table class="gaic-md-table"><thead><tr>';
+    header.forEach(function (cell) {
+        html += "<th>" + gibushAiChatFormatInlineMarkdown(cell) + "</th>";
+    });
+    html += "</tr></thead><tbody>";
+    body.forEach(function (row) {
+        html += "<tr>";
+        for (var i = 0; i < header.length; i++) {
+            html += "<td>" + gibushAiChatFormatInlineMarkdown(row[i] || "") + "</td>";
+        }
+        html += "</tr>";
+    });
+    html += "</tbody></table></div>";
+    return html;
+}
+
+/**
+ * Escape HTML, bold **text**, and render GFM pipe tables as real HTML tables.
+ * Safe for model/user text (no raw HTML passthrough).
+ */
+function gibushAiChatFormatMarkdown(text) {
+    var raw = text == null ? "" : String(text);
+    var lines = raw.split(/\r?\n/);
+    var parts = [];
+    var textBuf = [];
+
+    function flushText() {
+        if (!textBuf.length) return;
+        var block = textBuf.join("\n").replace(/^\n+/, "").replace(/\n+$/, "");
+        textBuf = [];
+        if (!block) return;
+        parts.push('<div class="gaic-md-text">' + gibushAiChatFormatInlineMarkdown(block) + "</div>");
+    }
+
+    var i = 0;
+    while (i < lines.length) {
+        if (
+            gibushAiChatIsMarkdownTableRow(lines[i]) &&
+            i + 1 < lines.length &&
+            gibushAiChatIsMarkdownTableSeparator(lines[i + 1])
+        ) {
+            flushText();
+            var tableRows = [gibushAiChatSplitMarkdownTableCells(lines[i])];
+            i += 2; // skip header + separator
+            while (i < lines.length && gibushAiChatIsMarkdownTableRow(lines[i])) {
+                tableRows.push(gibushAiChatSplitMarkdownTableCells(lines[i]));
+                i += 1;
+            }
+            parts.push(gibushAiChatRenderMarkdownTable(tableRows));
+            continue;
+        }
+        textBuf.push(lines[i]);
+        i += 1;
+    }
+    flushText();
+    return parts.join("");
 }
 
 function gibushAiChatRenderMessage(container, message) {
@@ -166,7 +452,33 @@ function gibushAiChatRenderMessage(container, message) {
     if (message.role === "assistant") {
         el.innerHTML = gibushAiChatFormatMarkdown(message.text || "");
     } else {
-        el.textContent = message.text || "";
+        var thumbSrc = message.image_thumb || message.image || null;
+        if (thumbSrc || message.has_image) {
+            var media = document.createElement("div");
+            media.className = "gaic-msg-media";
+            if (thumbSrc) {
+                var img = document.createElement("img");
+                img.src = thumbSrc;
+                img.alt = "צילום מסך מצורף";
+                img.className = "gaic-msg-image";
+                media.appendChild(img);
+            } else {
+                var stub = document.createElement("div");
+                stub.className = "gaic-msg-image-stub";
+                stub.textContent = "צילום מסך צורף";
+                media.appendChild(stub);
+            }
+            el.appendChild(media);
+        }
+        var text = message.text || "";
+        if (text) {
+            var textEl = document.createElement("div");
+            textEl.className = "gaic-msg-text";
+            textEl.textContent = text;
+            el.appendChild(textEl);
+        } else if (!thumbSrc && !message.has_image) {
+            el.textContent = "";
+        }
     }
     container.appendChild(el);
     if (message.role === "assistant" && message.toolCallsMade && message.toolCallsMade.length) {
@@ -187,6 +499,7 @@ function gibushAiChatRenderMessage(container, message) {
 function gibushAiChatNewConversation(messagesContainer) {
     try {
         localStorage.removeItem(GIBUSH_AI_CHAT_STORAGE_KEY);
+        localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
     } catch (e) { /* ignore */ }
     gibushAiChatSaveHistory([]);
     messagesContainer.innerHTML = "";
@@ -194,7 +507,6 @@ function gibushAiChatNewConversation(messagesContainer) {
 }
 
 function ensureGibushAiChatWidget() {
-    ensureGibushAiChatStyles();
     if (document.getElementById("gibush-ai-chat-root")) return;
 
     var mount = gibushAiChatFindMount();
@@ -245,12 +557,31 @@ function ensureGibushAiChatWidget() {
     spinLine.id = "gibush-ai-chat-spin-wrap";
     spinLine.innerHTML = '<span class="gaic-spinner" aria-hidden="true"></span><span>בודק את הנתונים…</span>';
 
+    var attachPreview = document.createElement("div");
+    attachPreview.className = "gaic-attach-preview";
+    attachPreview.id = "gibush-ai-chat-attach-preview";
+    attachPreview.style.display = "none";
+    attachPreview.innerHTML =
+        '<img id="gibush-ai-chat-attach-thumb" alt="תצוגה מקדימה" />' +
+        '<button type="button" id="gibush-ai-chat-attach-clear" aria-label="הסר תמונה">×</button>';
+
     var inputRow = document.createElement("div");
     inputRow.className = "gaic-input-row";
     var textarea = document.createElement("textarea");
     textarea.id = "gibush-ai-chat-input";
     textarea.rows = 1;
-    textarea.placeholder = "שאל משהו על מוערך, צוות או מחזור…";
+    textarea.placeholder = "שאל משהו…";
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/png,image/jpeg,image/webp,image/gif";
+    fileInput.id = "gibush-ai-chat-file";
+    fileInput.style.display = "none";
+    var attachBtn = document.createElement("button");
+    attachBtn.type = "button";
+    attachBtn.id = "gibush-ai-chat-attach";
+    attachBtn.textContent = "תמונה";
+    attachBtn.setAttribute("aria-label", "צרף צילום מסך או תמונה");
+    attachBtn.title = "צרף תמונה / צילום מסך (אפשר גם להדביק עם Ctrl+V)";
     var expensiveBtn = document.createElement("button");
     expensiveBtn.type = "button";
     expensiveBtn.id = "gibush-ai-chat-expensive";
@@ -266,16 +597,59 @@ function ensureGibushAiChatWidget() {
     sendBtn.id = "gibush-ai-chat-send";
     sendBtn.textContent = "שלח";
     inputRow.appendChild(textarea);
+    inputRow.appendChild(attachBtn);
     inputRow.appendChild(expensiveBtn);
     inputRow.appendChild(sendBtn);
+    inputRow.appendChild(fileInput);
+
+    var composerPresetRow = null;
+    if (gibushAiChatDiagnosticsEnabled()) {
+        composerPresetRow = document.createElement("div");
+        composerPresetRow.className = "gaic-preset-row";
+        composerPresetRow.setAttribute("data-gaic-preset-host", "composer");
+        composer.appendChild(composerPresetRow);
+    }
 
     composer.appendChild(spinLine);
+    composer.appendChild(attachPreview);
     composer.appendChild(inputRow);
 
     shell.appendChild(head);
     shell.appendChild(messages);
     shell.appendChild(composer);
     root.appendChild(shell);
+
+    var teamPicker = null;
+    var pendingDiagnosticPreset = null;
+    var selectedDiagnosticTeam = null;
+    if (gibushAiChatDiagnosticsEnabled()) {
+        teamPicker = document.createElement("div");
+        teamPicker.id = "gibush-ai-chat-team-picker";
+        teamPicker.setAttribute("dir", "rtl");
+        teamPicker.setAttribute("role", "dialog");
+        teamPicker.setAttribute("aria-modal", "true");
+        teamPicker.setAttribute("aria-labelledby", "gibush-ai-chat-team-picker-title");
+        teamPicker.innerHTML =
+            '<div class="gaic-picker-panel">' +
+            '<h3 class="gaic-picker-title" id="gibush-ai-chat-team-picker-title">נא לבחור צוות לניתוח</h3>' +
+            '<p class="gaic-picker-sub" id="gibush-ai-chat-team-picker-sub"></p>' +
+            '<div class="gaic-team-grid" id="gibush-ai-chat-team-grid"></div>' +
+            '<div class="gaic-picker-actions">' +
+            '<button type="button" id="gibush-ai-chat-team-confirm" disabled>הפעל ניתוח</button>' +
+            '<button type="button" id="gibush-ai-chat-team-cancel">ביטול</button>' +
+            "</div></div>";
+        root.appendChild(teamPicker);
+
+        var teamGrid = teamPicker.querySelector("#gibush-ai-chat-team-grid");
+        for (var teamN = 1; teamN <= 13; teamN++) {
+            var teamBtn = document.createElement("button");
+            teamBtn.type = "button";
+            teamBtn.className = "gaic-team-btn";
+            teamBtn.textContent = String(teamN);
+            teamBtn.setAttribute("data-team", String(teamN));
+            teamGrid.appendChild(teamBtn);
+        }
+    }
 
     // Clear Tadabase's empty HTML shell content so the chat owns the area.
     if (mount && mount !== document.body) {
@@ -286,7 +660,14 @@ function ensureGibushAiChatWidget() {
     }
 
     var expensiveArmed = false;
+    var requestInFlight = false;
+    var pendingAttachment = null; // { dataUrl, thumbDataUrl }
     var spinLabel = spinLine.querySelector("span:last-child");
+    var attachThumb = attachPreview.querySelector("#gibush-ai-chat-attach-thumb");
+    var attachClearBtn = attachPreview.querySelector("#gibush-ai-chat-attach-clear");
+    var teamConfirmBtn = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-confirm") : null;
+    var teamCancelBtn = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-cancel") : null;
+    var teamPickerSub = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-picker-sub") : null;
 
     function setExpensiveArmed(on) {
         expensiveArmed = !!on;
@@ -294,68 +675,128 @@ function ensureGibushAiChatWidget() {
         expensiveBtn.setAttribute("aria-pressed", expensiveArmed ? "true" : "false");
     }
 
+    function setPendingAttachment(next) {
+        pendingAttachment = next || null;
+        if (pendingAttachment && pendingAttachment.thumbDataUrl) {
+            attachThumb.src = pendingAttachment.thumbDataUrl;
+            attachPreview.style.display = "flex";
+        } else {
+            attachThumb.removeAttribute("src");
+            attachPreview.style.display = "none";
+        }
+    }
+
+    function clearPendingAttachment() {
+        setPendingAttachment(null);
+        try { fileInput.value = ""; } catch (e) { /* ignore */ }
+    }
+
+    function showAttachError(text) {
+        var history = gibushAiChatLoadHistory();
+        history.push({ role: "error", text: text });
+        gibushAiChatSaveHistory(history);
+        gibushAiChatRenderMessage(messages, { role: "error", text: text });
+        messages.scrollTop = messages.scrollHeight;
+    }
+
+    function acceptImageBlob(blob) {
+        if (requestInFlight) return;
+        gibushAiChatProcessImageBlob(blob)
+            .then(function (processed) {
+                setPendingAttachment(processed);
+                textarea.focus();
+            })
+            .catch(function (err) {
+                showAttachError((err && err.message) || String(err));
+            });
+    }
+
+    function setComposerBusy(busy) {
+        requestInFlight = !!busy;
+        sendBtn.disabled = requestInFlight;
+        expensiveBtn.disabled = requestInFlight;
+        attachBtn.disabled = requestInFlight;
+        if (attachClearBtn) attachClearBtn.disabled = requestInFlight;
+        textarea.disabled = requestInFlight;
+        var chips = shell.querySelectorAll("button.gaic-preset-chip");
+        for (var i = 0; i < chips.length; i++) {
+            chips[i].disabled = requestInFlight;
+        }
+    }
+
     function autosizeTextarea() {
         textarea.style.height = "auto";
         textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
     }
 
-    var history = gibushAiChatLoadHistory();
-    if (history.length) {
-        history.forEach(function (message) {
-            gibushAiChatRenderMessage(messages, message);
+    function fillPresetHost(host) {
+        if (!host) return;
+        host.innerHTML = "";
+        GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.forEach(function (preset) {
+            var chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "gaic-preset-chip";
+            chip.textContent = preset.label;
+            chip.setAttribute("data-preset", preset.id);
+            chip.disabled = requestInFlight;
+            chip.addEventListener("click", function () {
+                openTeamPicker(preset);
+            });
+            host.appendChild(chip);
         });
-    } else {
-        gibushAiChatRenderEmpty(messages);
     }
-    messages.scrollTop = messages.scrollHeight;
 
-    newConvoBtn.addEventListener("click", function () {
-        gibushAiChatNewConversation(messages);
-        setExpensiveArmed(false);
-        textarea.focus();
-    });
-    expensiveBtn.addEventListener("click", function () {
-        setExpensiveArmed(!expensiveArmed);
-    });
-    textarea.addEventListener("input", autosizeTextarea);
+    function refreshPresetChips() {
+        if (!gibushAiChatDiagnosticsEnabled()) return;
+        var emptyHost = messages.querySelector('[data-gaic-preset-host="empty"]');
+        if (emptyHost) fillPresetHost(emptyHost);
+        if (composerPresetRow) {
+            var hasHistory = gibushAiChatLoadHistory().length > 0;
+            composerPresetRow.style.display = hasHistory ? "flex" : "none";
+            if (hasHistory) fillPresetHost(composerPresetRow);
+        }
+    }
 
-    function sendMessage() {
-        var question = (textarea.value || "").trim();
-        if (!question) return;
+    function closeTeamPicker() {
+        if (!teamPicker) return;
+        teamPicker.classList.remove("gaic-open");
+        pendingDiagnosticPreset = null;
+        selectedDiagnosticTeam = null;
+        if (teamConfirmBtn) teamConfirmBtn.disabled = true;
+        var selected = teamPicker.querySelectorAll("button.gaic-team-btn.gaic-selected");
+        for (var i = 0; i < selected.length; i++) {
+            selected[i].classList.remove("gaic-selected");
+        }
+    }
 
-        var useExpensive = expensiveArmed;
-        var history = gibushAiChatLoadHistory();
-        history.push({ role: "user", text: question, expensive: useExpensive });
-        gibushAiChatSaveHistory(history);
-        gibushAiChatRenderMessage(messages, { role: "user", text: question, expensive: useExpensive });
-        textarea.value = "";
-        autosizeTextarea();
-        messages.scrollTop = messages.scrollHeight;
+    function openTeamPicker(preset) {
+        if (!teamPicker || requestInFlight) return;
+        pendingDiagnosticPreset = preset;
+        selectedDiagnosticTeam = null;
+        if (teamPickerSub) {
+            teamPickerSub.textContent = preset.label || "";
+        }
+        if (teamConfirmBtn) teamConfirmBtn.disabled = true;
+        var selected = teamPicker.querySelectorAll("button.gaic-team-btn.gaic-selected");
+        for (var i = 0; i < selected.length; i++) {
+            selected[i].classList.remove("gaic-selected");
+        }
+        teamPicker.classList.add("gaic-open");
+    }
 
-        sendBtn.disabled = true;
-        expensiveBtn.disabled = true;
+    function postAsk(body, options) {
+        options = options || {};
+        var isDiagnostic = !!options.diagnostic;
+        var teamNumber = options.teamNumber || null;
+        var presetId = options.presetId || null;
+
+        setComposerBusy(true);
         if (spinLabel) {
-            spinLabel.textContent = useExpensive
+            spinLabel.textContent = (body.expensive || isDiagnostic)
                 ? "בודק את הנתונים (מודל מורחב)…"
                 : "בודק את הנתונים…";
         }
         spinLine.style.display = "flex";
-
-        var body = { question: question };
-        if (useExpensive) {
-            body.expensive = true;
-        }
-        var teamNumber = gibushAiChatResolvedTeamNumber();
-        if (teamNumber) {
-            body.scope = { team_number: teamNumber };
-        }
-        var previousResponseId = null;
-        try {
-            previousResponseId = localStorage.getItem(GIBUSH_AI_CHAT_STORAGE_KEY);
-        } catch (e) { /* ignore */ }
-        if (previousResponseId) {
-            body.previous_response_id = previousResponseId;
-        }
 
         fetch(MISC_API_BASE + "/gibush_ai_ask", {
             method: "POST",
@@ -380,15 +821,20 @@ function ensureGibushAiChatWidget() {
                     history.push({ role: "error", text: errorText });
                     gibushAiChatSaveHistory(history);
                     gibushAiChatRenderMessage(messages, { role: "error", text: errorText });
+                    refreshPresetChips();
                     return;
                 }
                 var answer = result.data.answer || "";
                 var responseId = result.data.response_id || null;
                 var toolCallsMade = Array.isArray(result.data.tool_calls_made) ? result.data.tool_calls_made : [];
-                var wasExpensive = !!(result.data.expensive || useExpensive);
+                var wasExpensive = !!(result.data.expensive || body.expensive || isDiagnostic);
                 if (responseId) {
                     try {
-                        localStorage.setItem(GIBUSH_AI_CHAT_STORAGE_KEY, responseId);
+                        if (isDiagnostic) {
+                            localStorage.setItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY, responseId);
+                        } else {
+                            localStorage.setItem(GIBUSH_AI_CHAT_STORAGE_KEY, responseId);
+                        }
                     } catch (e) { /* ignore */ }
                 }
                 var assistantMessage = {
@@ -397,9 +843,15 @@ function ensureGibushAiChatWidget() {
                     toolCallsMade: toolCallsMade,
                     expensive: wasExpensive
                 };
+                if (isDiagnostic) {
+                    assistantMessage.diagnostic = true;
+                    assistantMessage.team_number = teamNumber;
+                    assistantMessage.preset = presetId;
+                }
                 history.push(assistantMessage);
                 gibushAiChatSaveHistory(history);
                 gibushAiChatRenderMessage(messages, assistantMessage);
+                refreshPresetChips();
             })
             .catch(function (e) {
                 var history = gibushAiChatLoadHistory();
@@ -407,14 +859,200 @@ function ensureGibushAiChatWidget() {
                 history.push({ role: "error", text: errorText });
                 gibushAiChatSaveHistory(history);
                 gibushAiChatRenderMessage(messages, { role: "error", text: errorText });
+                refreshPresetChips();
             })
             .finally(function () {
-                sendBtn.disabled = false;
-                expensiveBtn.disabled = false;
+                setComposerBusy(false);
                 spinLine.style.display = "none";
                 messages.scrollTop = messages.scrollHeight;
                 textarea.focus();
             });
+    }
+
+    function sendMessage() {
+        if (requestInFlight) return;
+        var question = (textarea.value || "").trim();
+        var attachment = pendingAttachment;
+        if (!question && !attachment) return;
+
+        var useExpensive = expensiveArmed;
+        var visibleText = question;
+        if (!visibleText && attachment) {
+            visibleText = GIBUSH_AI_CHAT_IMAGE_ONLY_PLACEHOLDER;
+        }
+        var userMessage = {
+            role: "user",
+            text: visibleText,
+            expensive: useExpensive
+        };
+        if (attachment) {
+            userMessage.image_thumb = attachment.thumbDataUrl;
+            userMessage.has_image = true;
+        }
+        var history = gibushAiChatLoadHistory();
+        history.push(userMessage);
+        gibushAiChatSaveHistory(history);
+        gibushAiChatRenderMessage(messages, userMessage);
+        refreshPresetChips();
+        textarea.value = "";
+        autosizeTextarea();
+        clearPendingAttachment();
+        messages.scrollTop = messages.scrollHeight;
+
+        var body = { question: question || visibleText };
+        if (attachment && attachment.dataUrl) {
+            body.image = attachment.dataUrl;
+        }
+        if (useExpensive) {
+            body.expensive = true;
+        }
+        var teamNumber = gibushAiChatResolvedTeamNumber();
+        if (teamNumber) {
+            body.scope = { team_number: teamNumber };
+        }
+        // Free-text turns never continue a diagnostic OpenAI thread.
+        var previousResponseId = null;
+        try {
+            previousResponseId = localStorage.getItem(GIBUSH_AI_CHAT_STORAGE_KEY);
+        } catch (e) { /* ignore */ }
+        if (previousResponseId) {
+            body.previous_response_id = previousResponseId;
+        }
+        postAsk(body, { diagnostic: false });
+    }
+
+    function sendDiagnostic(preset, teamNumber) {
+        if (requestInFlight || !preset || !teamNumber) return;
+        var history = gibushAiChatLoadHistory();
+        var visibleText = "צוות " + teamNumber + " · " + preset.label + "\n\n" + preset.user_prompt;
+        var userMessage = {
+            role: "user",
+            text: visibleText,
+            expensive: true,
+            diagnostic: true,
+            team_number: String(teamNumber),
+            preset: preset.id
+        };
+        history.push(userMessage);
+        gibushAiChatSaveHistory(history);
+        gibushAiChatRenderMessage(messages, userMessage);
+        refreshPresetChips();
+        messages.scrollTop = messages.scrollHeight;
+
+        var body = {
+            question: preset.user_prompt,
+            diagnostic_preset: preset.id,
+            team_number: String(teamNumber),
+            scope: { team_number: String(teamNumber) },
+            expensive: true
+        };
+
+        // Continue diagnostic thread only when the last assistant turn was the
+        // same diagnostic mode for the same team; otherwise start fresh.
+        var lastAssistant = gibushAiChatLastAssistantMessage(history.slice(0, -1));
+        var continueDiagnostic = !!(
+            lastAssistant &&
+            lastAssistant.diagnostic &&
+            String(lastAssistant.team_number || "") === String(teamNumber)
+        );
+        if (continueDiagnostic) {
+            var diagnosticResponseId = null;
+            try {
+                diagnosticResponseId = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
+            } catch (e) { /* ignore */ }
+            if (diagnosticResponseId) {
+                body.previous_response_id = diagnosticResponseId;
+            }
+        }
+
+        postAsk(body, {
+            diagnostic: true,
+            teamNumber: String(teamNumber),
+            presetId: preset.id
+        });
+    }
+
+    var history = gibushAiChatLoadHistory();
+    if (history.length) {
+        history.forEach(function (message) {
+            gibushAiChatRenderMessage(messages, message);
+        });
+    } else {
+        gibushAiChatRenderEmpty(messages);
+    }
+    refreshPresetChips();
+    messages.scrollTop = messages.scrollHeight;
+
+    newConvoBtn.addEventListener("click", function () {
+        gibushAiChatNewConversation(messages);
+        setExpensiveArmed(false);
+        clearPendingAttachment();
+        refreshPresetChips();
+        textarea.focus();
+    });
+    expensiveBtn.addEventListener("click", function () {
+        setExpensiveArmed(!expensiveArmed);
+    });
+    attachBtn.addEventListener("click", function () {
+        if (requestInFlight) return;
+        fileInput.click();
+    });
+    if (attachClearBtn) {
+        attachClearBtn.addEventListener("click", function () {
+            if (requestInFlight) return;
+            clearPendingAttachment();
+            textarea.focus();
+        });
+    }
+    fileInput.addEventListener("change", function () {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        acceptImageBlob(file);
+    });
+    textarea.addEventListener("paste", function (e) {
+        if (requestInFlight) return;
+        var items = (e.clipboardData && e.clipboardData.items) || [];
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].type && items[i].type.indexOf("image/") === 0) {
+                var blob = items[i].getAsFile();
+                if (blob) {
+                    e.preventDefault();
+                    acceptImageBlob(blob);
+                    return;
+                }
+            }
+        }
+    });
+    textarea.addEventListener("input", autosizeTextarea);
+
+    if (teamPicker) {
+        teamPicker.addEventListener("click", function (e) {
+            if (e.target === teamPicker) {
+                closeTeamPicker();
+            }
+        });
+        teamPicker.querySelector("#gibush-ai-chat-team-grid").addEventListener("click", function (e) {
+            var btn = e.target.closest("button.gaic-team-btn");
+            if (!btn) return;
+            var buttons = teamPicker.querySelectorAll("button.gaic-team-btn");
+            for (var i = 0; i < buttons.length; i++) {
+                buttons[i].classList.toggle("gaic-selected", buttons[i] === btn);
+            }
+            selectedDiagnosticTeam = btn.getAttribute("data-team");
+            if (teamConfirmBtn) teamConfirmBtn.disabled = !selectedDiagnosticTeam;
+        });
+        if (teamCancelBtn) {
+            teamCancelBtn.addEventListener("click", closeTeamPicker);
+        }
+        if (teamConfirmBtn) {
+            teamConfirmBtn.addEventListener("click", function () {
+                if (!pendingDiagnosticPreset || !selectedDiagnosticTeam) return;
+                var preset = pendingDiagnosticPreset;
+                var team = selectedDiagnosticTeam;
+                closeTeamPicker();
+                sendDiagnostic(preset, team);
+            });
+        }
     }
 
     sendBtn.addEventListener("click", sendMessage);

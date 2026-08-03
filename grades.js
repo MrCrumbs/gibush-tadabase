@@ -2,19 +2,31 @@ var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var initialElementGrades = document.querySelector("article div[ui-view]");
 var currentTeamNumberGrades = "{loggedInUser.צוות שטח}";
 var engToHebTranslations = {
-    "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-    "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
-}
+    "sprints": "ספרינטים",
+    "crawls": "זחילות",
+    "sociometric_stretcher": "אלונקה סוציומטרית",
+    "holes": "חפירת בור",
+    "sacks": "שקים",
+    "stretcher": "מסע אלונקה"
+};
+var ACTIVITY_COLUMN_ORDER = [
+    "sprints",
+    "crawls",
+    "sociometric_stretcher",
+    "sacks",
+    "holes",
+    "stretcher"
+];
 
 TB.render("component_23", async function (data) {
     window.trun = function() { return false; };
     $("div[af-data-table]").remove();
-    
+
     const existing = initialElementGrades.nextSibling;
     if (existing) existing.remove();
-    
+
     showLoading();
-    
+
     try {
         const gradesData = await fetchGradesData();
         if (gradesData) {
@@ -30,9 +42,7 @@ TB.render("component_23", async function (data) {
     }
 });
 
-// Utility function to show/hide loader
 function showLoading() {
-  // Remove existing canvas and loader first
   $('#hichartsJS').remove();
   $('#loading-spinner').remove();
   $('<div id="loading-spinner">' +
@@ -60,7 +70,43 @@ function showErrorMessage() {
     $(initialElementGrades).after(messageDiv);
 }
 
-async function fetchGradesData(){
+function getGradeClass(grade) {
+    if (grade === '-' || grade === null || grade === undefined || grade === "") {
+        return 'grade-no-data';
+    }
+    if (grade >= 80) return 'grade-excellent';
+    if (grade >= 60) return 'grade-average';
+    return 'grade-failing';
+}
+
+function gradeCellFormatter(highlighted) {
+    return function (cell) {
+        var display = (cell === null || cell === undefined || cell === "") ? '-' : cell;
+        var className = getGradeClass(display);
+        var extra = highlighted ? ' highlighted-column' : '';
+        return gridjs.html('<span class="' + className + extra + '">' + display + '</span>');
+    };
+}
+
+function buildActivityColumns(launchedActivities) {
+    var launchedSet = {};
+    (launchedActivities || []).forEach(function (name) {
+        launchedSet[name] = true;
+    });
+    return ACTIVITY_COLUMN_ORDER.filter(function (name) {
+        return launchedSet[name];
+    }).map(function (name) {
+        return {
+            id: name,
+            name: engToHebTranslations[name] || name,
+            sort: true,
+            width: '120px',
+            formatter: gradeCellFormatter(false)
+        };
+    });
+}
+
+async function fetchGradesData() {
     try {
         const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data_for_grades", {
             method: "POST",
@@ -73,11 +119,11 @@ async function fetchGradesData(){
                 activity_names: "sprints,crawls,sociometric_stretcher,sacks,holes,stretcher"
             })
         });
-        
+
         const data = await response.json();
         console.log(data);
-        
-        if (Object.keys(data).length === 0) {
+
+        if (!data || data.error || Object.keys(data).length === 0) {
             console.log("No grades data for team and activity:", currentTeamNumberGrades);
             return null;
         }
@@ -88,128 +134,60 @@ async function fetchGradesData(){
     }
 }
 
-function createTable(gradesData){
-    // Remove existing table
+function createTable(gradesData) {
     $('#grades-table-container').remove();
-    
-    // Create container for the table
+
     const tableContainer = $('<div id="grades-table-container"></div>');
     $(initialElementGrades).after(tableContainer);
-    
-    // Transform data for Grid.js
-    const teamData = gradesData[currentTeamNumberGrades];
-    
-    const tableData = Object.entries(teamData).map(([assesseeNumber, activities]) => {
-        const row = { 
-            assesseeNumber,
-            sprints: activities.sprints ?? '-',
-            crawls: activities.crawls ?? '-',
-            sociometric_stretcher: activities.sociometric_stretcher ?? '-',
-            sacks: activities.sacks ?? '-',
-            holes: activities.holes ?? '-',
-            stretcher: activities.stretcher ?? '-',
-            final_grade: activities.final_grade ?? '-'
+
+    const teamKey = String(currentTeamNumberGrades);
+    const teamPayload = gradesData[teamKey] || gradesData[currentTeamNumberGrades];
+    if (!teamPayload || !teamPayload.members) {
+        showNoDataMessage();
+        return;
+    }
+
+    const launched = teamPayload.launched_activities || [];
+    const members = teamPayload.members || {};
+    if (!launched.length && !Object.keys(members).length) {
+        showNoDataMessage();
+        return;
+    }
+
+    const tableData = Object.entries(members).map(function ([assesseeNumber, activities]) {
+        const row = {
+            assesseeNumber: assesseeNumber,
+            final_grade: (activities.final_grade === null || activities.final_grade === undefined)
+                ? '-'
+                : activities.final_grade
         };
+        launched.forEach(function (name) {
+            var value = activities[name];
+            row[name] = (value === null || value === undefined || value === "") ? '-' : value;
+        });
         return row;
     });
-    
-    // Helper function to get grade color class
-    function getGradeClass(grade) {
-        if (grade === '-') return 'grade-no-data';
-        if (grade >= 80) return 'grade-excellent';
-        if (grade >= 60) return 'grade-average';
-        return 'grade-failing';
-    }
-    
-    // Define columns
+
     const columns = [
-        { 
+        {
             id: 'assesseeNumber',
             name: 'מוערך',
             sort: true,
-            width: '100px' // Set explicit width
+            width: '100px'
         },
-        { 
+        {
             id: 'final_grade',
             name: 'ציון סופי',
             sort: true,
             width: '120px',
-            formatter: (cell) => {
-                const className = getGradeClass(cell);
-                return gridjs.html(`<span class="${className} highlighted-column">${cell}</span>`);
-            }
-        },
-        { 
-            id: 'sprints',
-            name: 'ספרינטים',
-            sort: true,
-            width: '120px', // Ensure enough space for header
-            formatter: (cell) => {
-                const className = getGradeClass(cell);
-                return gridjs.html(`<span class="${className}">${cell}</span>`);
-            }
-        },
-        { 
-            id: 'crawls',
-            name: 'זחילות',
-            sort: true,
-            width: '110px',
-            formatter: (cell) => {
-                const className = getGradeClass(cell);
-                return gridjs.html(`<span class="${className}">${cell}</span>`);
-            }
-        },
-        { 
-            id: 'sociometric_stretcher',
-            name: 'אלונקה',
-            sort: true,
-            width: '120px', // Longer header needs more space
-            formatter: (cell) => {
-                const className = getGradeClass(cell);
-                return gridjs.html(`<span class="${className}">${cell}</span>`);
-            }
-        },
-        { 
-            id: 'sacks',
-            name: 'שקים',
-            sort: true,
-            width: '100px',
-            formatter: (cell) => {
-                const className = getGradeClass(cell);
-                return gridjs.html(`<span class="${className}">${cell}</span>`);
-            }
-        },
-        { 
-            id: 'holes',
-            name: 'בורות',
-            sort: true,
-            width: '100px',
-            formatter: (cell) => {
-                const className = getGradeClass(cell);
-                return gridjs.html(`<span class="${className}">${cell}</span>`);
-            }
-        },
-        { 
-            id: 'stretcher',
-            name: 'מסע אלונקה',
-            sort: true,
-            width: '100px',
-            formatter: (cell) => {
-                const className = getGradeClass(cell);
-                return gridjs.html(`<span class="${className}">${cell}</span>`);
-            }
+            formatter: gradeCellFormatter(true)
         }
-    ];
-    
-    // Create Grid.js instance
-    const grid = new gridjs.Grid({
+    ].concat(buildActivityColumns(launched));
+
+    new gridjs.Grid({
         data: tableData,
         columns: columns,
-        // height: "400px", 
         height: "calc(100vh - 100px)",
-        // pagination: {
-        //     limit: 35
-        // },
         pagination: false,
         search: true,
         sort: true,
@@ -223,7 +201,7 @@ function createTable(gradesData){
                 of: 'מתוך',
                 to: 'עד',
                 showing: 'מציג',
-                results: () => 'תוצאות'
+                results: function () { return 'תוצאות'; }
             }
         },
         style: {
@@ -238,5 +216,4 @@ function createTable(gradesData){
         },
         fixedHeader: true
     }).render(document.getElementById('grades-table-container'));
-    
 }

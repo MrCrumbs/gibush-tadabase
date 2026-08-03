@@ -1,10 +1,7 @@
 /*
- * Optional: paste into the Tadabase page's Custom CSS field instead of
- * relying on ai_chat.js's self-injected <style> tag. Both are equivalent -
- * ai_chat.js works standalone (it injects these same rules via
- * ensureGibushAiChatStyles), this file just mirrors the existing repo
- * convention of a same-named .css file per .js file. Safe to include both;
- * rules are identical so there's no conflict, just redundancy.
+ * Styles for gibush AI chat (ai_chat.js).
+ * Paste into the Tadabase page's Custom CSS field. The JS no longer injects
+ * these rules — without this CSS the chat will be unstyled.
  */
 
 article:has(#gibush-ai-chat-root),
@@ -130,12 +127,42 @@ article:has(#gibush-ai-chat-root),
     color: #fff;
     border-bottom-left-radius: 4px;
 }
+#gibush-ai-chat-messages .gaic-msg-media {
+    margin-bottom: 8px;
+}
+#gibush-ai-chat-messages .gaic-msg-image {
+    display: block;
+    max-width: min(280px, 100%);
+    max-height: 220px;
+    width: auto;
+    height: auto;
+    border-radius: 10px;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.08);
+}
+#gibush-ai-chat-messages .gaic-msg-image-stub {
+    display: inline-block;
+    font-size: 12px;
+    opacity: 0.85;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.12);
+}
+#gibush-ai-chat-messages .gaic-msg-user .gaic-msg-text + .gaic-msg-media,
+#gibush-ai-chat-messages .gaic-msg-user .gaic-msg-media + .gaic-msg-text {
+    margin-top: 0;
+}
 #gibush-ai-chat-messages .gaic-msg-assistant {
     margin-right: auto;
     margin-left: 0;
+    max-width: min(960px, 100%);
     background: var(--gaic-assistant);
     color: var(--gaic-text);
     border-bottom-right-radius: 4px;
+    white-space: normal;
+}
+#gibush-ai-chat-messages .gaic-msg-assistant .gaic-md-text {
+    white-space: pre-wrap;
 }
 #gibush-ai-chat-messages .gaic-msg-error {
     margin-right: auto;
@@ -150,6 +177,45 @@ article:has(#gibush-ai-chat-root),
     color: var(--gaic-muted);
     background: none;
     padding: 0 6px;
+}
+#gibush-ai-chat-messages .gaic-table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin: 12px 0;
+    border: 1px solid var(--gaic-border);
+    border-radius: 10px;
+    background: #fff;
+}
+#gibush-ai-chat-messages table.gaic-md-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: right;
+}
+#gibush-ai-chat-messages table.gaic-md-table th,
+#gibush-ai-chat-messages table.gaic-md-table td {
+    border-bottom: 1px solid #ececec;
+    padding: 8px 10px;
+    vertical-align: top;
+    max-width: 220px;
+    word-break: break-word;
+    white-space: normal;
+    text-align: right;
+}
+#gibush-ai-chat-messages table.gaic-md-table th {
+    background: #f3f4f6;
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+    text-align: right;
+}
+#gibush-ai-chat-messages table.gaic-md-table tr:last-child td {
+    border-bottom: none;
+}
+#gibush-ai-chat-messages table.gaic-md-table tbody tr:nth-child(even) td {
+    background: #fafafa;
 }
 
 #gibush-ai-chat-shell .gaic-composer {
@@ -180,6 +246,42 @@ article:has(#gibush-ai-chat-root),
         transform: rotate(360deg);
     }
 }
+#gibush-ai-chat-shell .gaic-attach-preview {
+    display: none;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0 4px 8px;
+    padding: 8px;
+    border: 1px solid var(--gaic-border);
+    border-radius: 12px;
+    background: #fff;
+    width: fit-content;
+    max-width: 100%;
+}
+#gibush-ai-chat-shell .gaic-attach-preview img {
+    display: block;
+    max-width: 160px;
+    max-height: 120px;
+    width: auto;
+    height: auto;
+    border-radius: 8px;
+    object-fit: contain;
+}
+#gibush-ai-chat-shell .gaic-attach-preview button {
+    border: none;
+    background: #f3f4f6;
+    color: #374151;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+#gibush-ai-chat-shell .gaic-attach-preview button:hover {
+    background: #e5e7eb;
+}
 #gibush-ai-chat-shell .gaic-input-row {
     display: flex;
     gap: 8px;
@@ -189,6 +291,28 @@ article:has(#gibush-ai-chat-root),
     border-radius: 18px;
     background: #fff;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+#gibush-ai-chat-shell button#gibush-ai-chat-attach {
+    text-align: center;
+    border: 1px solid var(--gaic-border);
+    background: #fff;
+    color: #5c5c5c;
+    border-radius: 10px;
+    min-width: 52px;
+    height: 40px;
+    padding: 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1;
+    flex-shrink: 0;
+}
+#gibush-ai-chat-shell button#gibush-ai-chat-attach:hover {
+    background: #f9fafb;
+}
+#gibush-ai-chat-shell button#gibush-ai-chat-attach:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 #gibush-ai-chat-shell textarea#gibush-ai-chat-input {
     flex: 1;
@@ -203,6 +327,7 @@ article:has(#gibush-ai-chat-root),
     background: transparent;
 }
 #gibush-ai-chat-shell button#gibush-ai-chat-expensive {
+    text-align: center;
     border: 1px solid var(--gaic-border);
     background: #fff;
     color: #5c5c5c;
@@ -256,6 +381,111 @@ article:has(#gibush-ai-chat-root),
     font-weight: 700;
 }
 
+#gibush-ai-chat-shell .gaic-preset-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 4px 12px;
+}
+#gibush-ai-chat-shell .gaic-preset-row.gaic-preset-empty {
+    justify-content: center;
+    padding: 20px 8px 0;
+}
+#gibush-ai-chat-shell button.gaic-preset-chip {
+    border: 1px solid var(--gaic-border);
+    background: #fff;
+    color: #333;
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    line-height: 1.3;
+}
+#gibush-ai-chat-shell button.gaic-preset-chip:hover {
+    background: #f0f0f0;
+}
+#gibush-ai-chat-shell button.gaic-preset-chip:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+#gibush-ai-chat-team-picker {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 15, 15, 0.35);
+    padding: 16px;
+}
+#gibush-ai-chat-team-picker.gaic-open {
+    display: flex;
+}
+#gibush-ai-chat-team-picker .gaic-picker-panel {
+    width: min(420px, 100%);
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid var(--gaic-border);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    padding: 18px 18px 14px;
+    text-align: right;
+}
+#gibush-ai-chat-team-picker .gaic-picker-title {
+    margin: 0 0 6px;
+    font-size: 16px;
+    font-weight: 700;
+}
+#gibush-ai-chat-team-picker .gaic-picker-sub {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--gaic-muted);
+}
+#gibush-ai-chat-team-picker .gaic-team-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+}
+#gibush-ai-chat-team-picker button.gaic-team-btn {
+    border: 1px solid var(--gaic-border);
+    background: #fff;
+    border-radius: 10px;
+    padding: 10px 0;
+    font-size: 14px;
+    cursor: pointer;
+}
+#gibush-ai-chat-team-picker button.gaic-team-btn:hover {
+    background: #f5f5f5;
+}
+#gibush-ai-chat-team-picker button.gaic-team-btn.gaic-selected {
+    background: #2d3748;
+    border-color: #2d3748;
+    color: #fff;
+}
+#gibush-ai-chat-team-picker .gaic-picker-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+}
+#gibush-ai-chat-team-picker .gaic-picker-actions button {
+    border: 1px solid var(--gaic-border);
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+}
+#gibush-ai-chat-team-picker button#gibush-ai-chat-team-confirm {
+    background: #2d3748;
+    border-color: #2d3748;
+    color: #fff;
+}
+#gibush-ai-chat-team-picker button#gibush-ai-chat-team-confirm:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 @media (max-width: 720px) {
     #gibush-ai-chat-root {
         min-height: calc(100vh - 80px);
@@ -272,5 +502,8 @@ article:has(#gibush-ai-chat-root),
     }
     #gibush-ai-chat-shell .gaic-composer {
         padding: 10px 12px 14px;
+    }
+    #gibush-ai-chat-team-picker .gaic-team-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
