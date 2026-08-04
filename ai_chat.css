@@ -178,6 +178,12 @@ article:has(#gibush-ai-chat-root),
     background: none;
     padding: 0 6px;
 }
+/* Answer cut short by the server-side time budget - louder than the tool trace,
+   quieter than an error bubble. */
+#gibush-ai-chat-messages .gaic-msg-partial {
+    color: #b45309;
+    font-weight: 600;
+}
 #gibush-ai-chat-messages .gaic-table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
