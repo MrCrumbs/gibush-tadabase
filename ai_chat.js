@@ -27,6 +27,12 @@
  * Multi-turn state: the last OpenAI response_id is kept in localStorage
  * (per-browser) so follow-up questions continue the same conversation
  * without the backend storing any chat history. "שיחה חדשה" clears it.
+ *
+ * DIAGNOSTIC MODE: preset chips run under a live-only, team-scoped prompt and
+ * keep a separate response_id. A banner shows the active mode with "יציאה
+ * לשיחה חופשית". Exiting (button or sending free text) switches to the free
+ * prompt + full tools while migrating the diagnostic response_id into the
+ * free-chat thread so follow-ups like "אותה שאלה על ארכיון…" keep context.
  */
 
 var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
@@ -40,6 +46,7 @@ var GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}";
 
 var GIBUSH_AI_CHAT_STORAGE_KEY = "gibushAiChat_previousResponseId";
 var GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY = "gibushAiChat_diagnosticResponseId";
+var GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY = "gibushAiChat_diagnosticMode";
 var GIBUSH_AI_CHAT_HISTORY_KEY = "gibushAiChat_history";
 
 // Client-side image limits before POST (server also validates).
@@ -315,6 +322,74 @@ function gibushAiChatLastAssistantMessage(history) {
     return null;
 }
 
+function gibushAiChatLoadDiagnosticMode() {
+    try {
+        var raw = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY);
+        if (!raw) return null;
+        var parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object") return null;
+        if (!parsed.team_number || !parsed.preset) return null;
+        return {
+            team_number: String(parsed.team_number),
+            preset: String(parsed.preset),
+            label: parsed.label ? String(parsed.label) : String(parsed.preset)
+        };
+    } catch (e) {
+        return null;
+    }
+}
+
+function gibushAiChatSaveDiagnosticMode(mode) {
+    try {
+        if (!mode) {
+            localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY);
+            return;
+        }
+        localStorage.setItem(
+            GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY,
+            JSON.stringify({
+                team_number: String(mode.team_number),
+                preset: String(mode.preset),
+                label: mode.label ? String(mode.label) : String(mode.preset)
+            })
+        );
+    } catch (e) { /* ignore */ }
+}
+
+/**
+ * Leave diagnostic UI mode and hand the OpenAI thread to free chat.
+ * Returns true if a diagnostic response_id was migrated to the free-chat key.
+ */
+function gibushAiChatExitDiagnosticMode() {
+    var migrated = false;
+    var diagnosticResponseId = null;
+    try {
+        diagnosticResponseId = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+    if (diagnosticResponseId) {
+        try {
+            localStorage.setItem(GIBUSH_AI_CHAT_STORAGE_KEY, diagnosticResponseId);
+            migrated = true;
+        } catch (e) { /* ignore */ }
+    }
+    gibushAiChatSaveDiagnosticMode(null);
+    return migrated;
+}
+
+function gibushAiChatEnterDiagnosticMode(teamNumber, preset) {
+    if (!teamNumber || !preset) return;
+    gibushAiChatSaveDiagnosticMode({
+        team_number: String(teamNumber),
+        preset: preset.id || String(preset),
+        label: preset.label || preset.id || String(preset)
+    });
+}
+
+function gibushAiChatDiagnosticModeLabel(mode) {
+    if (!mode) return "";
+    return "מצב אבחון · צוות " + mode.team_number + " · " + mode.label;
+}
+
 function gibushAiChatRenderEmpty(container) {
     var empty = document.createElement("div");
     empty.className = "gaic-empty";
@@ -500,6 +575,7 @@ function gibushAiChatNewConversation(messagesContainer) {
     try {
         localStorage.removeItem(GIBUSH_AI_CHAT_STORAGE_KEY);
         localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
+        localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY);
     } catch (e) { /* ignore */ }
     gibushAiChatSaveHistory([]);
     messagesContainer.innerHTML = "";
@@ -610,6 +686,26 @@ function ensureGibushAiChatWidget() {
         composer.appendChild(composerPresetRow);
     }
 
+    var diagModeBar = null;
+    var diagModeText = null;
+    var diagModeExitBtn = null;
+    if (gibushAiChatDiagnosticsEnabled()) {
+        diagModeBar = document.createElement("div");
+        diagModeBar.className = "gaic-diag-mode";
+        diagModeBar.id = "gibush-ai-chat-diag-mode";
+        diagModeBar.style.display = "none";
+        diagModeText = document.createElement("span");
+        diagModeText.className = "gaic-diag-mode-text";
+        diagModeExitBtn = document.createElement("button");
+        diagModeExitBtn.type = "button";
+        diagModeExitBtn.id = "gibush-ai-chat-diag-exit";
+        diagModeExitBtn.textContent = "חזרה לשיחה חופשית";
+        diagModeExitBtn.setAttribute("aria-label", "יציאה ממצב אבחון לשיחה חופשית");
+        diagModeBar.appendChild(diagModeText);
+        diagModeBar.appendChild(diagModeExitBtn);
+        composer.appendChild(diagModeBar);
+    }
+
     composer.appendChild(spinLine);
     composer.appendChild(attachPreview);
     composer.appendChild(inputRow);
@@ -717,11 +813,48 @@ function ensureGibushAiChatWidget() {
         expensiveBtn.disabled = requestInFlight;
         attachBtn.disabled = requestInFlight;
         if (attachClearBtn) attachClearBtn.disabled = requestInFlight;
+        if (diagModeExitBtn) diagModeExitBtn.disabled = requestInFlight;
         textarea.disabled = requestInFlight;
         var chips = shell.querySelectorAll("button.gaic-preset-chip");
         for (var i = 0; i < chips.length; i++) {
             chips[i].disabled = requestInFlight;
         }
+    }
+
+    function refreshDiagModeBar() {
+        if (!diagModeBar || !diagModeText) return;
+        var mode = gibushAiChatLoadDiagnosticMode();
+        if (!mode) {
+            diagModeBar.style.display = "none";
+            diagModeText.textContent = "";
+            return;
+        }
+        diagModeText.textContent = gibushAiChatDiagnosticModeLabel(mode);
+        diagModeBar.style.display = "flex";
+    }
+
+    /**
+     * Exit diagnostic UI mode. Migrates the OpenAI thread into free chat.
+     * If announce=true, append a short notice bubble to the visible history.
+     */
+    function exitDiagnosticMode(announce) {
+        var wasActive = !!gibushAiChatLoadDiagnosticMode();
+        var migrated = gibushAiChatExitDiagnosticMode();
+        refreshDiagModeBar();
+        if (announce && wasActive) {
+            var notice = {
+                role: "assistant",
+                text: migrated
+                    ? "יצאת ממצב אבחון. ההמשך בשיחה חופשית (ארכיון + כל הכלים) — ההקשר מהניתוח הקודם נשמר."
+                    : "יצאת ממצב אבחון. ההמשך בשיחה חופשית."
+            };
+            var history = gibushAiChatLoadHistory();
+            history.push(notice);
+            gibushAiChatSaveHistory(history);
+            gibushAiChatRenderMessage(messages, notice);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        return migrated;
     }
 
     function autosizeTextarea() {
@@ -821,6 +954,16 @@ function ensureGibushAiChatWidget() {
                     history.push({ role: "error", text: errorText });
                     gibushAiChatSaveHistory(history);
                     gibushAiChatRenderMessage(messages, { role: "error", text: errorText });
+                    if (isDiagnostic) {
+                        var existingDiagId = null;
+                        try {
+                            existingDiagId = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
+                        } catch (err) { /* ignore */ }
+                        if (!existingDiagId) {
+                            gibushAiChatSaveDiagnosticMode(null);
+                            refreshDiagModeBar();
+                        }
+                    }
                     refreshPresetChips();
                     return;
                 }
@@ -847,6 +990,15 @@ function ensureGibushAiChatWidget() {
                     assistantMessage.diagnostic = true;
                     assistantMessage.team_number = teamNumber;
                     assistantMessage.preset = presetId;
+                    var presetMeta = null;
+                    for (var pi = 0; pi < GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.length; pi++) {
+                        if (GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS[pi].id === presetId) {
+                            presetMeta = GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS[pi];
+                            break;
+                        }
+                    }
+                    gibushAiChatEnterDiagnosticMode(teamNumber, presetMeta || { id: presetId, label: presetId });
+                    refreshDiagModeBar();
                 }
                 history.push(assistantMessage);
                 gibushAiChatSaveHistory(history);
@@ -859,6 +1011,16 @@ function ensureGibushAiChatWidget() {
                 history.push({ role: "error", text: errorText });
                 gibushAiChatSaveHistory(history);
                 gibushAiChatRenderMessage(messages, { role: "error", text: errorText });
+                if (isDiagnostic) {
+                    var existingDiagId = null;
+                    try {
+                        existingDiagId = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
+                    } catch (err) { /* ignore */ }
+                    if (!existingDiagId) {
+                        gibushAiChatSaveDiagnosticMode(null);
+                        refreshDiagModeBar();
+                    }
+                }
                 refreshPresetChips();
             })
             .finally(function () {
@@ -899,7 +1061,24 @@ function ensureGibushAiChatWidget() {
         clearPendingAttachment();
         messages.scrollTop = messages.scrollHeight;
 
-        var body = { question: question || visibleText };
+        // Free text leaves diagnostic UI mode but keeps the OpenAI thread.
+        var priorDiagMode = gibushAiChatLoadDiagnosticMode();
+        var continuedFromDiagnostic = false;
+        if (priorDiagMode) {
+            continuedFromDiagnostic = !!exitDiagnosticMode(false);
+        }
+
+        var apiQuestion = question || visibleText;
+        if (continuedFromDiagnostic && priorDiagMode) {
+            apiQuestion =
+                "המשך משיחת אבחון קודמת (צוות " + priorDiagMode.team_number +
+                " · " + priorDiagMode.label +
+                "). המשתמש עבר לשיחה חופשית — ניתן להשתמש בארכיון ובכלים המלאים, " +
+                "ולענות על אותה שאלת אבחון בהקשר חדש אם מבקשים.\n\n" +
+                apiQuestion;
+        }
+
+        var body = { question: apiQuestion };
         if (attachment && attachment.dataUrl) {
             body.image = attachment.dataUrl;
         }
@@ -910,7 +1089,6 @@ function ensureGibushAiChatWidget() {
         if (teamNumber) {
             body.scope = { team_number: teamNumber };
         }
-        // Free-text turns never continue a diagnostic OpenAI thread.
         var previousResponseId = null;
         try {
             previousResponseId = localStorage.getItem(GIBUSH_AI_CHAT_STORAGE_KEY);
@@ -936,6 +1114,8 @@ function ensureGibushAiChatWidget() {
         history.push(userMessage);
         gibushAiChatSaveHistory(history);
         gibushAiChatRenderMessage(messages, userMessage);
+        gibushAiChatEnterDiagnosticMode(teamNumber, preset);
+        refreshDiagModeBar();
         refreshPresetChips();
         messages.scrollTop = messages.scrollHeight;
 
@@ -947,10 +1127,14 @@ function ensureGibushAiChatWidget() {
             expensive: true
         };
 
-        // Continue diagnostic thread only when the last assistant turn was the
-        // same diagnostic mode for the same team; otherwise start fresh.
+        // Continue diagnostic thread only when still in diagnostic mode for the
+        // same team (or last assistant was that diagnostic). Otherwise start fresh.
+        var mode = gibushAiChatLoadDiagnosticMode();
         var lastAssistant = gibushAiChatLastAssistantMessage(history.slice(0, -1));
         var continueDiagnostic = !!(
+            mode &&
+            String(mode.team_number) === String(teamNumber)
+        ) || !!(
             lastAssistant &&
             lastAssistant.diagnostic &&
             String(lastAssistant.team_number || "") === String(teamNumber)
@@ -981,6 +1165,7 @@ function ensureGibushAiChatWidget() {
         gibushAiChatRenderEmpty(messages);
     }
     refreshPresetChips();
+    refreshDiagModeBar();
     messages.scrollTop = messages.scrollHeight;
 
     newConvoBtn.addEventListener("click", function () {
@@ -988,8 +1173,16 @@ function ensureGibushAiChatWidget() {
         setExpensiveArmed(false);
         clearPendingAttachment();
         refreshPresetChips();
+        refreshDiagModeBar();
         textarea.focus();
     });
+    if (diagModeExitBtn) {
+        diagModeExitBtn.addEventListener("click", function () {
+            if (requestInFlight) return;
+            exitDiagnosticMode(true);
+            textarea.focus();
+        });
+    }
     expensiveBtn.addEventListener("click", function () {
         setExpensiveArmed(!expensiveArmed);
     });
@@ -1056,12 +1249,7 @@ function ensureGibushAiChatWidget() {
     }
 
     sendBtn.addEventListener("click", sendMessage);
-    textarea.addEventListener("keydown", function (e) {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
+    // Enter inserts a newline (phone-friendly); send is only via the button.
 
     textarea.focus();
 }

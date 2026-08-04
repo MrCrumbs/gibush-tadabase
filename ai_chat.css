@@ -409,6 +409,43 @@ article:has(#gibush-ai-chat-root),
     cursor: wait;
 }
 
+#gibush-ai-chat-shell .gaic-diag-mode {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 0 4px 10px;
+    padding: 8px 12px;
+    border: 1px solid #c5d4e8;
+    background: #eef4fb;
+    border-radius: 10px;
+}
+#gibush-ai-chat-shell .gaic-diag-mode-text {
+    font-size: 13px;
+    color: #1a365d;
+    line-height: 1.35;
+    flex: 1 1 auto;
+}
+#gibush-ai-chat-shell button#gibush-ai-chat-diag-exit {
+    border: 1px solid #2c5282;
+    background: #fff;
+    color: #2c5282;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex: 0 0 auto;
+}
+#gibush-ai-chat-shell button#gibush-ai-chat-diag-exit:hover {
+    background: #e2ecf7;
+}
+#gibush-ai-chat-shell button#gibush-ai-chat-diag-exit:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
 #gibush-ai-chat-team-picker {
     position: fixed;
     inset: 0;
@@ -448,6 +485,7 @@ article:has(#gibush-ai-chat-root),
     margin-bottom: 14px;
 }
 #gibush-ai-chat-team-picker button.gaic-team-btn {
+    text-align: center;
     border: 1px solid var(--gaic-border);
     background: #fff;
     border-radius: 10px;
