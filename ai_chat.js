@@ -26,15 +26,16 @@
  * (png/jpeg/webp/gif). The client downscales before send; history keeps only
  * a small thumbnail (full image is not stored in localStorage).
  *
- * Multi-turn state: the last OpenAI response_id is kept in localStorage
- * (per-browser) so follow-up questions continue the same conversation
- * without the backend storing any chat history. "שיחה חדשה" clears it.
+ * Multi-turn state: the last opaque application conversation token (returned
+ * in the response_id compatibility field) is kept in localStorage so follow-up
+ * questions continue the same bounded server-side conversation. "שיחה חדשה"
+ * clears it.
  *
  * DIAGNOSTIC MODE: preset chips run under a live-only, team-scoped prompt and
- * keep a separate response_id. A banner shows the active mode with "יציאה
- * לשיחה חופשית". Exiting (button or sending free text) switches to the free
- * prompt + full tools while migrating the diagnostic response_id into the
- * free-chat thread so follow-ups like "אותה שאלה על ארכיון…" keep context.
+ * keep a separate conversation token. A banner shows the active mode with
+ * "יציאה לשיחה חופשית". Exiting switches back to the independently stored
+ * free-chat thread; diagnostic tokens never cross a team, preset, or mode
+ * boundary.
  */
 
 var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
@@ -47,6 +48,8 @@ var GIBUSH_AI_CHAT_SCOPED_MODE = false;
 var GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}";
 
 var GIBUSH_AI_CHAT_STORAGE_KEY = "gibushAiChat_previousResponseId";
+// Legacy diagnostic token key is removed on write/clear. New diagnostic state
+// stores mode + token atomically in GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY.
 var GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY = "gibushAiChat_diagnosticResponseId";
 var GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY = "gibushAiChat_diagnosticMode";
 var GIBUSH_AI_CHAT_HISTORY_KEY = "gibushAiChat_history";
@@ -64,10 +67,31 @@ var GIBUSH_AI_CHAT_IMAGE_ONLY_PLACEHOLDER =
 // when the browser or network can't stream. The server heartbeats every ~10s,
 // so a gap longer than this means the connection died without an error event.
 var GIBUSH_AI_CHAT_STREAM_IDLE_TIMEOUT_MS = 45000;
-var GIBUSH_AI_CHAT_STREAM_CUT_MESSAGE =
-    "החיבור נקטע לפני שהתשובה הושלמה. נסה לשאול שוב, ואם הבעיה חוזרת — נסה לצמצם את אופי השאלה.";
+// Initial SSE connection plus one same-turn re-attachment after consecutive
+// transport failures. Server "pending" responses keep polling until the
+// overall turn deadline below; they are not terminal failures.
+var GIBUSH_AI_CHAT_STREAM_MAX_ATTEMPTS = 2;
+var GIBUSH_AI_CHAT_PENDING_REATTACH_DELAY_MS = 750;
+var GIBUSH_AI_CHAT_TURN_DEADLINE_MS = 11 * 60 * 1000;
+var GIBUSH_AI_CHAT_TURN_DEADLINE_MESSAGE =
+    "הבקשה ארכה זמן רב מדי ונעצרה. אפשר לנסות שוב או לצמצם את השאלה.";
+var GIBUSH_AI_CHAT_JSON_TIMEOUT_MS = 180000;
+var GIBUSH_AI_CHAT_JSON_TIMEOUT_MESSAGE =
+    "הבקשה ארכה זמן רב מדי ונעצרה. אפשר לנסות שוב או לצמצם את השאלה.";
 var GIBUSH_AI_CHAT_PARTIAL_NOTE =
     "התשובה מבוססת על נתונים חלקיים — הזמן שהוקצב לשאלה נגמר. כדאי לצמצם את אופי השאלה ולשאול שוב.";
+
+/** Return an opaque id that stays stable across stream -> JSON fallback. */
+function gibushAiChatNewTurnId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+        return window.crypto.randomUUID();
+    }
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (char) {
+        var random = Math.floor(Math.random() * 16);
+        var value = char === "x" ? random : ((random & 3) | 8);
+        return value.toString(16);
+    });
+}
 
 // Preset ids + Hebrew labels/task text for the visible bubble only.
 // Backend DIAGNOSTIC_TASKS.user_prompt (English) is authoritative for the model.
@@ -78,14 +102,14 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
         user_prompt:
             "נתח את יציבות הביצועים של המועמדים הנמצאים בשליש העליון ובשליש האמצעי.\n" +
             "התמקד בזחילות ובספרינטים ובדוק את השינוי במיקום היחסי בין כל שני מקצים סמוכים.\n" +
-            "זהה את שני המועמדים בעלי התנודתיות הגבוהה ביותר.\n" +
+            "זהה עד שני מועמדים עם תנודתיות גבוהה שמגובה היטב בנתונים.\n" +
             "אל תבחר מועמד בגלל נפילה בודדת. חפש דפוס חוזר של קפיצות משמעותיות, " +
             "למשל מעבר מקדמת הקבוצה לחלקה האחורי וחזרה.\n" +
             "עבור כל מועמד: הצג רצף מיקומים או דוגמאות עוקבות שממחישות את הזגזוג; " +
             "ציין כמה פעמים הופיע שינוי חריף; קבע האם התנודתיות מופיעה בתרגיל אחד או בשניהם; " +
             "הבחן בין חוסר יציבות מתמשך לבין משבר קצר ולאחריו התייצבות; " +
             "נסח נקודת בדיקה אחת למגבש.\n" +
-            "דרג את שני המועמדים מהפחות יציב ליותר יציב."
+            "דרג את הממצאים מהפחות יציב ליותר יציב."
     },
     {
         id: "late_fade",
@@ -94,7 +118,7 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
             "נתח את המועמדים בשליש העליון ובשליש האמצעי וחפש ירידה תפקודית ככל שהגיבוש מתקדם.\n" +
             "השווה בין השליש הראשון לשליש האחרון בזחילות, בספרינטים ובאלונקה הסוציומטרית " +
             "(אם פעילות זו כבר הושקה).\n" +
-            "זהה את שלושת המועמדים בעלי השחיקה המאוחרת המשמעותית ביותר.\n" +
+            "זהה עד שלושה מועמדים עם שחיקה מאוחרת משמעותית שמגובה בנתונים.\n" +
             "שחיקה יכולה להתבטא בירידה במיקום היחסי, במעבר מאלונקה או ג׳ריקן ל־FIRST או ל־0, " +
             "ברצף תוצאות חלשות בשליש האחרון או במקצים חסרים בחלק המאוחר.\n" +
             "עבור כל מועמד: הצג רמת ביצוע בתחילה ובסוף; כמת את גודל הירידה; " +
@@ -108,7 +132,7 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
         user_prompt:
             "חפש בקרב המועמדים בשליש העליון ובשליש האמצעי מקרים של ירידה משמעותית " +
             "ולאחריה חזרה יציבה לרמת ביצוע טובה יותר.\n" +
-            "זהה את שלושת המועמדים בעלי יכולת ההתאוששות הבולטת ביותר.\n" +
+            "זהה עד שלושה מועמדים עם התאוששות בולטת שמגובה בנתונים.\n" +
             "התאוששות תיחשב רק כאשר הייתה נפילה ברורה או רצף חלש, לאחריה הופיעו לפחות " +
             "שני מקצים רצופים טובים יותר, והשיפור לא נעלם מיד במקצה הבא.\n" +
             "עבור כל מועמד: תאר את נקודת המשבר; הצג רצף מקצים לפני/במהלך/אחרי; " +
@@ -135,7 +159,7 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
         label: "פוטנציאל בשליש האמצעי",
         user_prompt:
             "נתח רק את המועמדים בשליש האמצעי.\n" +
-            "זהה את שלושת המועמדים בעלי הפוטנציאל הגבוה ביותר להערכה מחודשת, " +
+            "זהה עד שלושה מועמדים עם פוטנציאל מבוסס להערכה מחודשת, " +
             "אף שאינם בשליש העליון.\n" +
             "חפש מגמת שיפור, ביצוע טוב יותר בשליש האחרון, יציבות גבוהה ללא תוצאות שיא, " +
             "התאוששות ברורה, אחידות בין סוגי מאמץ, או השתתפות ללא מקצים חסרים.\n" +
@@ -149,7 +173,7 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
         user_prompt:
             "השווה בין ביצועי המועמדים בשליש העליון ובשליש האמצעי בפעילויות שהושקו " +
             "(זחילות, ספרינטים, אלונקה סוציומטרית, שקים, אלונקה רגילה — לפי הזמין).\n" +
-            "זהה את שני המועמדים בעלי הפרופיל האחיד והמאוזן ביותר ואת שני המועמדים " +
+            "זהה עד שני מועמדים בעלי פרופיל אחיד ומאוזן שמגובה בנתונים ועד שני מועמדים " +
             "בעלי הפערים הגדולים ביותר בין סוגי המאמץ.\n" +
             "עבור כל מועמד: התחום החזק/החלש; גודל הפער; האם החולשה מרמה נמוכה / חוסר יציבות " +
             "/ שחיקה / מקצים חסרים; האם החוזק מתרגיל חוזר או חד־פעמי; " +
@@ -171,6 +195,13 @@ function gibushAiChatResolvedTeamNumber() {
         return null;
     }
     return raw;
+}
+
+function gibushAiChatFreeConversationStorageKey() {
+    var teamNumber = gibushAiChatResolvedTeamNumber();
+    return GIBUSH_AI_CHAT_STORAGE_KEY + ":" + (
+        teamNumber ? "team-" + String(teamNumber) : "unscoped"
+    );
 }
 
 /**
@@ -324,16 +355,6 @@ function gibushAiChatDiagnosticsEnabled() {
     return !GIBUSH_AI_CHAT_SCOPED_MODE;
 }
 
-function gibushAiChatLastAssistantMessage(history) {
-    if (!Array.isArray(history)) return null;
-    for (var i = history.length - 1; i >= 0; i--) {
-        if (history[i] && history[i].role === "assistant") {
-            return history[i];
-        }
-    }
-    return null;
-}
-
 function gibushAiChatLoadDiagnosticMode() {
     try {
         var raw = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY);
@@ -344,7 +365,12 @@ function gibushAiChatLoadDiagnosticMode() {
         return {
             team_number: String(parsed.team_number),
             preset: String(parsed.preset),
-            label: parsed.label ? String(parsed.label) : String(parsed.preset)
+            label: parsed.label ? String(parsed.label) : String(parsed.preset),
+            response_id: (
+                typeof parsed.response_id === "string" && parsed.response_id
+                    ? parsed.response_id
+                    : null
+            )
         };
     } catch (e) {
         return null;
@@ -362,38 +388,43 @@ function gibushAiChatSaveDiagnosticMode(mode) {
             JSON.stringify({
                 team_number: String(mode.team_number),
                 preset: String(mode.preset),
-                label: mode.label ? String(mode.label) : String(mode.preset)
+                label: mode.label ? String(mode.label) : String(mode.preset),
+                response_id: mode.response_id ? String(mode.response_id) : null
             })
         );
+        localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
     } catch (e) { /* ignore */ }
+}
+
+function gibushAiChatDiagnosticContextMatches(mode, teamNumber, presetId) {
+    return !!(
+        mode &&
+        String(mode.team_number) === String(teamNumber) &&
+        String(mode.preset) === String(presetId)
+    );
 }
 
 /**
- * Leave diagnostic UI mode and hand the OpenAI thread to free chat.
- * Returns true if a diagnostic response_id was migrated to the free-chat key.
+ * Leave diagnostic UI mode. Diagnostic and free-chat tokens are intentionally
+ * isolated; crossing the mode boundary discards the diagnostic token and keeps
+ * the independently stored free-chat thread.
  */
 function gibushAiChatExitDiagnosticMode() {
-    var migrated = false;
-    var diagnosticResponseId = null;
+    var wasActive = !!gibushAiChatLoadDiagnosticMode();
     try {
-        diagnosticResponseId = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
+        localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
     } catch (e) { /* ignore */ }
-    if (diagnosticResponseId) {
-        try {
-            localStorage.setItem(GIBUSH_AI_CHAT_STORAGE_KEY, diagnosticResponseId);
-            migrated = true;
-        } catch (e) { /* ignore */ }
-    }
     gibushAiChatSaveDiagnosticMode(null);
-    return migrated;
+    return wasActive;
 }
 
-function gibushAiChatEnterDiagnosticMode(teamNumber, preset) {
+function gibushAiChatEnterDiagnosticMode(teamNumber, preset, responseId) {
     if (!teamNumber || !preset) return;
     gibushAiChatSaveDiagnosticMode({
         team_number: String(teamNumber),
         preset: preset.id || String(preset),
-        label: preset.label || preset.id || String(preset)
+        label: preset.label || preset.id || String(preset),
+        response_id: responseId || null
     });
 }
 
@@ -586,12 +617,19 @@ function gibushAiChatRenderMessage(container, message) {
         expensiveTrace.textContent = "מודל מורחב";
         container.appendChild(expensiveTrace);
     }
+    if (message.role === "assistant" && message.conversationReset) {
+        var resetTrace = document.createElement("div");
+        resetTrace.className = "gaic-msg gaic-msg-trace";
+        resetTrace.textContent = "הקשר השיחה הקודם לא היה זמין, ולכן התשובה התחילה הקשר חדש.";
+        container.appendChild(resetTrace);
+    }
     return el;
 }
 
 function gibushAiChatNewConversation(messagesContainer) {
     try {
         localStorage.removeItem(GIBUSH_AI_CHAT_STORAGE_KEY);
+        localStorage.removeItem(gibushAiChatFreeConversationStorageKey());
         localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
         localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY);
     } catch (e) { /* ignore */ }
@@ -775,6 +813,9 @@ function ensureGibushAiChatWidget() {
 
     var expensiveArmed = false;
     var requestInFlight = false;
+    var activeTurn = null;
+    var conversationEpoch = 0;
+    var attachmentGeneration = 0;
     var pendingAttachment = null; // { dataUrl, thumbDataUrl }
     var spinLabel = spinLine.querySelector("span:last-child");
     var attachThumb = attachPreview.querySelector("#gibush-ai-chat-attach-thumb");
@@ -801,6 +842,7 @@ function ensureGibushAiChatWidget() {
     }
 
     function clearPendingAttachment() {
+        attachmentGeneration += 1;
         setPendingAttachment(null);
         try { fileInput.value = ""; } catch (e) { /* ignore */ }
     }
@@ -815,19 +857,38 @@ function ensureGibushAiChatWidget() {
 
     function acceptImageBlob(blob) {
         if (requestInFlight) return;
+        var acceptedEpoch = conversationEpoch;
+        var acceptedGeneration = attachmentGeneration + 1;
+        attachmentGeneration = acceptedGeneration;
         gibushAiChatProcessImageBlob(blob)
             .then(function (processed) {
+                if (
+                    acceptedEpoch !== conversationEpoch ||
+                    acceptedGeneration !== attachmentGeneration ||
+                    requestInFlight
+                ) return;
                 setPendingAttachment(processed);
                 textarea.focus();
             })
             .catch(function (err) {
+                if (
+                    acceptedEpoch !== conversationEpoch ||
+                    acceptedGeneration !== attachmentGeneration
+                ) return;
                 showAttachError((err && err.message) || String(err));
             });
     }
 
     function setComposerBusy(busy) {
         requestInFlight = !!busy;
-        sendBtn.disabled = requestInFlight;
+        // While busy this becomes a Stop button. It deliberately remains
+        // clickable so the browser can abort and ask the backend to cancel.
+        sendBtn.disabled = false;
+        sendBtn.textContent = requestInFlight ? "עצור" : "שלח";
+        sendBtn.setAttribute(
+            "aria-label",
+            requestInFlight ? "עצור את יצירת התשובה" : "שלח שאלה"
+        );
         expensiveBtn.disabled = requestInFlight;
         attachBtn.disabled = requestInFlight;
         if (attachClearBtn) attachClearBtn.disabled = requestInFlight;
@@ -852,19 +913,18 @@ function ensureGibushAiChatWidget() {
     }
 
     /**
-     * Exit diagnostic UI mode. Migrates the OpenAI thread into free chat.
+     * Exit diagnostic UI mode without moving its token into free chat.
      * If announce=true, append a short notice bubble to the visible history.
      */
     function exitDiagnosticMode(announce) {
         var wasActive = !!gibushAiChatLoadDiagnosticMode();
-        var migrated = gibushAiChatExitDiagnosticMode();
+        gibushAiChatExitDiagnosticMode();
         refreshDiagModeBar();
         if (announce && wasActive) {
             var notice = {
                 role: "assistant",
-                text: migrated
-                    ? "יצאת ממצב אבחון. ההמשך בשיחה חופשית (ארכיון + כל הכלים) — ההקשר מהניתוח הקודם נשמר."
-                    : "יצאת ממצב אבחון. ההמשך בשיחה חופשית."
+                text: "יצאת ממצב אבחון. ההמשך בשיחה חופשית (ארכיון + כל הכלים); " +
+                    "שיחות האבחון נשמרות בנפרד כדי למנוע ערבוב בין הקשרים."
             };
             var history = gibushAiChatLoadHistory();
             history.push(notice);
@@ -872,7 +932,7 @@ function ensureGibushAiChatWidget() {
             gibushAiChatRenderMessage(messages, notice);
             messages.scrollTop = messages.scrollHeight;
         }
-        return migrated;
+        return wasActive;
     }
 
     function autosizeTextarea() {
@@ -939,19 +999,179 @@ function ensureGibushAiChatWidget() {
         if (spinLabel && text) spinLabel.textContent = text;
     }
 
+    function isCurrentTurnContext(ctx) {
+        return !!(
+            ctx &&
+            ctx.turn &&
+            activeTurn === ctx.turn &&
+            !ctx.turn.cancelled &&
+            ctx.epoch === conversationEpoch
+        );
+    }
+
+    function removeLiveAssistant(ctx) {
+        if (ctx && ctx.liveAssistantEl && ctx.liveAssistantEl.parentNode) {
+            ctx.liveAssistantEl.parentNode.removeChild(ctx.liveAssistantEl);
+        }
+        if (ctx) ctx.liveAssistantEl = null;
+    }
+
+    function appendAnswerDelta(event, ctx) {
+        if (!isCurrentTurnContext(ctx)) return;
+        var delta = event.delta;
+        if (delta == null) delta = event.text;
+        if (delta == null) delta = event.answer_delta;
+        if (delta == null || delta === "") return;
+        ctx.streamedAnswer = (ctx.streamedAnswer || "") + String(delta);
+        if (ctx.renderScheduled) return;
+        ctx.renderScheduled = true;
+        var schedule = window.requestAnimationFrame || function (callback) {
+            return window.setTimeout(callback, 16);
+        };
+        schedule(function () {
+            ctx.renderScheduled = false;
+            if (!isCurrentTurnContext(ctx) || !ctx.streamedAnswer) return;
+            if (!ctx.liveAssistantEl) {
+                ctx.liveAssistantEl = gibushAiChatRenderMessage(messages, {
+                    role: "assistant",
+                    text: ""
+                });
+                ctx.liveAssistantEl.setAttribute("data-gaic-turn-id", ctx.turn.id);
+            }
+            ctx.liveAssistantEl.innerHTML = gibushAiChatFormatMarkdown(ctx.streamedAnswer);
+            messages.scrollTop = messages.scrollHeight;
+        });
+    }
+
+    function clearResponseIdForContext(ctx) {
+        try {
+            if (ctx && ctx.diagnostic) {
+                var mode = gibushAiChatLoadDiagnosticMode();
+                if (mode) {
+                    mode.response_id = null;
+                    gibushAiChatSaveDiagnosticMode(mode);
+                }
+                localStorage.removeItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
+            } else {
+                localStorage.removeItem(gibushAiChatFreeConversationStorageKey());
+            }
+        } catch (e) { /* ignore */ }
+    }
+
+    function handleConversationReset(ctx) {
+        if (!isCurrentTurnContext(ctx)) return;
+        clearResponseIdForContext(ctx);
+        ctx.conversationReset = true;
+        setSpinnerText("ההקשר הקודם לא זמין — ממשיך בשיחה חדשה…");
+    }
+
+    function requestBackendCancellation(turn) {
+        if (
+            !turn || turn.cancelAcknowledged || turn.cancelInFlight ||
+            (turn.cancelAttempts || 0) >= 3 || !window.fetch
+        ) return;
+        turn.cancelAttempts = (turn.cancelAttempts || 0) + 1;
+        turn.cancelInFlight = true;
+        try {
+            fetch(MISC_API_BASE + "/gibush_ai_cancel", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer " + GIBUSH_API_TOKEN
+                },
+                body: JSON.stringify({ client_turn_id: turn.id }),
+                keepalive: true
+            })
+                .then(function (response) {
+                    if (!response.ok) throw new Error("cancel request failed");
+                    turn.cancelAcknowledged = true;
+                })
+                .catch(function () {
+                    turn.cancelInFlight = false;
+                    if (!turn.cancelAcknowledged && turn.cancelAttempts < 3) {
+                        window.setTimeout(function () {
+                            requestBackendCancellation(turn);
+                        }, 300 * turn.cancelAttempts);
+                    }
+                })
+                .then(function () {
+                    turn.cancelInFlight = false;
+                });
+        } catch (e) {
+            turn.cancelInFlight = false;
+            if (turn.cancelAttempts < 3) {
+                window.setTimeout(function () {
+                    requestBackendCancellation(turn);
+                }, 300 * turn.cancelAttempts);
+            }
+        }
+    }
+
+    function clearTurnDeadline(turn) {
+        if (turn && turn.deadlineTimer) {
+            window.clearTimeout(turn.deadlineTimer);
+            turn.deadlineTimer = null;
+        }
+    }
+
+    function expireActiveTurn(turn) {
+        if (!turn || activeTurn !== turn || turn.cancelled) return;
+        clearTurnDeadline(turn);
+        turn.overallTimedOut = true;
+        // Render while the context is still current, then make every late
+        // stream/JSON callback stale before aborting the active transport.
+        handleAskFailure(GIBUSH_AI_CHAT_TURN_DEADLINE_MESSAGE, turn.ctx);
+        turn.cancelled = true;
+        if (turn.controller) {
+            try { turn.controller.abort(); } catch (e) { /* ignore */ }
+        }
+        requestBackendCancellation(turn);
+        activeTurn = null;
+        setComposerBusy(false);
+        spinLine.style.display = "none";
+        messages.scrollTop = messages.scrollHeight;
+        textarea.focus();
+    }
+
+    function cancelActiveTurn(silent) {
+        var turn = activeTurn;
+        if (!turn) return;
+        clearTurnDeadline(turn);
+        turn.cancelled = true;
+        if (turn.controller) {
+            try { turn.controller.abort(); } catch (e) { /* ignore */ }
+        }
+        requestBackendCancellation(turn);
+        removeLiveAssistant(turn.ctx);
+        activeTurn = null;
+        setComposerBusy(false);
+        spinLine.style.display = "none";
+        if (!silent && turn.epoch === conversationEpoch) {
+            var stopped = { role: "error", text: "הבקשה נעצרה." };
+            var history = gibushAiChatLoadHistory();
+            history.push(stopped);
+            gibushAiChatSaveHistory(history);
+            gibushAiChatRenderMessage(messages, stopped);
+            messages.scrollTop = messages.scrollHeight;
+        }
+        textarea.focus();
+    }
+
     function handleAskSuccess(data, ctx) {
+        if (!isCurrentTurnContext(ctx)) return;
+        if (data && data.conversation_reset) {
+            handleConversationReset(ctx);
+        }
         var history = gibushAiChatLoadHistory();
         var isDiagnostic = !!ctx.diagnostic;
-        var answer = data.answer || "";
+        var answer = data.answer || ctx.streamedAnswer || "";
         var responseId = data.response_id || null;
         var toolCallsMade = Array.isArray(data.tool_calls_made) ? data.tool_calls_made : [];
         var wasExpensive = !!(data.expensive || ctx.expensive || isDiagnostic);
         if (responseId) {
             try {
-                if (isDiagnostic) {
-                    localStorage.setItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY, responseId);
-                } else {
-                    localStorage.setItem(GIBUSH_AI_CHAT_STORAGE_KEY, responseId);
+                if (!isDiagnostic) {
+                    localStorage.setItem(gibushAiChatFreeConversationStorageKey(), responseId);
                 }
             } catch (e) { /* ignore */ }
         }
@@ -960,7 +1180,8 @@ function ensureGibushAiChatWidget() {
             text: answer,
             toolCallsMade: toolCallsMade,
             expensive: wasExpensive,
-            partial: !!data.partial
+            partial: !!data.partial,
+            conversationReset: !!ctx.conversationReset
         };
         if (isDiagnostic) {
             assistantMessage.diagnostic = true;
@@ -973,9 +1194,14 @@ function ensureGibushAiChatWidget() {
                     break;
                 }
             }
-            gibushAiChatEnterDiagnosticMode(ctx.teamNumber, presetMeta || { id: ctx.presetId, label: ctx.presetId });
+            gibushAiChatEnterDiagnosticMode(
+                ctx.teamNumber,
+                presetMeta || { id: ctx.presetId, label: ctx.presetId },
+                responseId
+            );
             refreshDiagModeBar();
         }
+        removeLiveAssistant(ctx);
         history.push(assistantMessage);
         gibushAiChatSaveHistory(history);
         gibushAiChatRenderMessage(messages, assistantMessage);
@@ -983,16 +1209,16 @@ function ensureGibushAiChatWidget() {
     }
 
     function handleAskFailure(errorText, ctx) {
+        if (!isCurrentTurnContext(ctx)) return;
+        removeLiveAssistant(ctx);
         var history = gibushAiChatLoadHistory();
         var text = errorText || "שגיאה לא ידועה";
         history.push({ role: "error", text: text });
         gibushAiChatSaveHistory(history);
         gibushAiChatRenderMessage(messages, { role: "error", text: text });
         if (ctx.diagnostic) {
-            var existingDiagId = null;
-            try {
-                existingDiagId = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
-            } catch (err) { /* ignore */ }
+            var existingMode = gibushAiChatLoadDiagnosticMode();
+            var existingDiagId = existingMode && existingMode.response_id;
             if (!existingDiagId) {
                 gibushAiChatSaveDiagnosticMode(null);
                 refreshDiagModeBar();
@@ -1006,47 +1232,61 @@ function ensureGibushAiChatWidget() {
         if (status === 501) {
             text = "מנוע ה-AI טרם הופעל במלואו (הרישום/לולאת הכלים עוד לא מומשו). " + text;
         }
+        if (data && data.correlation_id) {
+            text += " (מזהה תקלה: " + String(data.correlation_id) + ")";
+        }
         return text;
+    }
+
+    function isPendingAiTurn(data) {
+        return !!(
+            data &&
+            data.code === "AI_TURN_PENDING" &&
+            data.retryable !== false
+        );
     }
 
     // One "data: {...}" block from the SSE stream. Comment frames (": ping",
     // the opening padding) carry no payload and parse to null.
     function parseSseBlock(block) {
-        var lines = (block || "").split("\n");
+        var lines = (block || "").split(/\r?\n/);
+        var payloadLines = [];
         for (var i = 0; i < lines.length; i++) {
             var line = lines[i];
             if (!line || line.charAt(0) === ":") continue;
             if (line.indexOf("data:") !== 0) continue;
             var payload = line.substring(5).replace(/^\s+/, "");
-            if (!payload) continue;
-            try {
-                return JSON.parse(payload);
-            } catch (e) {
-                return null;
-            }
+            if (payload) payloadLines.push(payload);
         }
-        return null;
+        if (!payloadLines.length) return null;
+        try {
+            return JSON.parse(payloadLines.join("\n"));
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
      * Ask over SSE, updating the spinner from status events.
      *
-     * Resolves with { needsFallback: true } when nothing at all came through
-     * (streaming blocked, no ReadableStream support, dead before the first
-     * event) so the caller can retry on the plain JSON endpoint. Resolves with
-     * undefined once it has rendered an answer or an error itself - a stream
-     * that dies mid-answer is NOT retried, since re-running the turn would cost
-     * another full (possibly expensive) model run.
+     * Resolves with { needsFallback: true } whenever the transport ends before
+     * a terminal event. The fallback carries the same client_turn_id, so the
+     * backend waits for/replays the existing job instead of running it twice;
+     * this is also how a connection resumes after some answer deltas arrived.
      */
     function streamAsk(body, ctx) {
         return new Promise(function (resolve) {
             if (!window.fetch || typeof AbortController === "undefined" || typeof TextDecoder === "undefined") {
-                resolve({ needsFallback: true });
+                resolve({ needsFallback: true, retryable: false });
+                return;
+            }
+            if (!isCurrentTurnContext(ctx)) {
+                resolve();
                 return;
             }
 
             var controller = new AbortController();
-            var eventsSeen = 0;
+            ctx.turn.controller = controller;
             var finished = false;
             var idleTimer = null;
 
@@ -1062,6 +1302,7 @@ function ensureGibushAiChatWidget() {
             function resetIdleTimer() {
                 stopIdleTimer();
                 idleTimer = setTimeout(function () {
+                    ctx.turn.streamTimedOut = true;
                     try { controller.abort(); } catch (e) { /* ignore */ }
                 }, GIBUSH_AI_CHAT_STREAM_IDLE_TIMEOUT_MS);
             }
@@ -1071,13 +1312,30 @@ function ensureGibushAiChatWidget() {
                 finished = true;
                 stopIdleTimer();
                 try { controller.abort(); } catch (e) { /* ignore */ }
+                if (ctx.turn.controller === controller) ctx.turn.controller = null;
                 resolve(outcome);
             }
 
             function handleEvent(event) {
-                eventsSeen++;
+                if (!isCurrentTurnContext(ctx)) {
+                    settle();
+                    return;
+                }
                 if (event.type === "status") {
                     setSpinnerText(event.message);
+                    return;
+                }
+                if (event.type === "answer_delta" || event.type === "response.output_text.delta") {
+                    appendAnswerDelta(event, ctx);
+                    return;
+                }
+                if (event.type === "answer_reset") {
+                    removeLiveAssistant(ctx);
+                    ctx.streamedAnswer = "";
+                    return;
+                }
+                if (event.type === "conversation_reset") {
+                    handleConversationReset(ctx);
                     return;
                 }
                 if (event.type === "done") {
@@ -1086,11 +1344,17 @@ function ensureGibushAiChatWidget() {
                     return;
                 }
                 if (event.type === "error") {
-                    handleAskFailure(event.error, ctx);
+                    if (isPendingAiTurn(event)) {
+                        settle({ pending: true });
+                        return;
+                    }
+                    handleAskFailure(askErrorText(event), ctx);
                     settle();
                 }
             }
 
+            // Cover DNS/TLS/server stalls before headers as well as idle bodies.
+            resetIdleTimer();
             fetch(MISC_API_BASE + "/gibush_ai_ask_stream", {
                 method: "POST",
                 headers: {
@@ -1107,12 +1371,18 @@ function ensureGibushAiChatWidget() {
                         return res.json()
                             .then(function (data) { return data; }, function () { return {}; })
                             .then(function (data) {
+                                if (isPendingAiTurn(data)) {
+                                    settle({ pending: true });
+                                    return;
+                                }
                                 handleAskFailure(askErrorText(data, res.status), ctx);
                                 settle();
                             });
                     }
                     if (!res.body || !res.body.getReader) {
-                        settle({ needsFallback: true });
+                        // Retrying cannot add ReadableStream support to this
+                        // browser, so proceed directly to the JSON transport.
+                        settle({ needsFallback: true, retryable: false });
                         return;
                     }
 
@@ -1125,17 +1395,12 @@ function ensureGibushAiChatWidget() {
                         return reader.read().then(function (chunk) {
                             if (finished) return;
                             if (chunk.done) {
-                                if (eventsSeen) {
-                                    handleAskFailure(GIBUSH_AI_CHAT_STREAM_CUT_MESSAGE, ctx);
-                                    settle();
-                                } else {
-                                    settle({ needsFallback: true });
-                                }
+                                settle({ needsFallback: true, retryable: true });
                                 return;
                             }
                             resetIdleTimer();
                             buffer += decoder.decode(chunk.value, { stream: true });
-                            var blocks = buffer.split("\n\n");
+                            var blocks = buffer.split(/\r?\n\r?\n/);
                             buffer = blocks[blocks.length - 1];
                             for (var i = 0; i < blocks.length - 1; i++) {
                                 var event = parseSseBlock(blocks[i]);
@@ -1150,67 +1415,242 @@ function ensureGibushAiChatWidget() {
                 })
                 .catch(function (e) {
                     if (finished) return;
-                    if (!eventsSeen) {
-                        settle({ needsFallback: true });
+                    if (!isCurrentTurnContext(ctx) || ctx.turn.cancelled) {
+                        settle();
                         return;
                     }
-                    handleAskFailure((e && e.message) || String(e), ctx);
-                    settle();
+                    settle({ needsFallback: true, retryable: true });
                 });
         });
     }
 
+    /**
+     * Re-attach once after consecutive nonterminal transport failures, and
+     * continue SSE polling for explicit server-pending responses until the
+     * overall deadline. Every attempt receives the same immutable request
+     * body/client_turn_id, so Redis either waits for the original owner or
+     * replays its terminal result. Capability failures move to JSON polling.
+     */
+    function streamAskWithRetry(body, ctx) {
+        var attempt = 0;
+        var consecutiveTransportFailures = 0;
+
+        function reattachAfterPending() {
+            setSpinnerText("הבקשה עדיין בעיבוד — מתחבר מחדש לאותה בקשה…");
+            return new Promise(function (resolve) {
+                window.setTimeout(resolve, GIBUSH_AI_CHAT_PENDING_REATTACH_DELAY_MS);
+            }).then(function () {
+                if (!isCurrentTurnContext(ctx)) return;
+                if (Date.now() >= ctx.turn.deadlineAt) {
+                    expireActiveTurn(ctx.turn);
+                    return;
+                }
+                return runAttempt();
+            });
+        }
+
+        function runAttempt() {
+            if (!isCurrentTurnContext(ctx)) return Promise.resolve();
+            if (Date.now() >= ctx.turn.deadlineAt) {
+                expireActiveTurn(ctx.turn);
+                return Promise.resolve();
+            }
+            attempt += 1;
+            ctx.streamAttempt = attempt;
+            ctx.turn.streamTimedOut = false;
+
+            return streamAsk(body, ctx).then(function (outcome) {
+                if (!isCurrentTurnContext(ctx)) return;
+                if (outcome && outcome.pending) {
+                    consecutiveTransportFailures = 0;
+                    ctx.transportFailureStreak = 0;
+                    return reattachAfterPending();
+                }
+                if (
+                    outcome &&
+                    outcome.needsFallback &&
+                    outcome.retryable !== false &&
+                    isCurrentTurnContext(ctx)
+                ) {
+                    consecutiveTransportFailures += 1;
+                    if (consecutiveTransportFailures < GIBUSH_AI_CHAT_STREAM_MAX_ATTEMPTS) {
+                        setSpinnerText("החיבור נקטע — מתחבר מחדש לאותה בקשה…");
+                        return runAttempt();
+                    }
+                }
+                return outcome;
+            });
+        }
+
+        return runAttempt();
+    }
+
     function jsonAsk(body, ctx) {
+        if (!isCurrentTurnContext(ctx)) return Promise.resolve();
         setSpinnerText(ctx.expensive || ctx.diagnostic
             ? "בודק את הנתונים (מודל מורחב)…"
             : "בודק את הנתונים…");
-        return fetch(MISC_API_BASE + "/gibush_ai_ask", {
+        var controller = typeof AbortController === "undefined" ? null : new AbortController();
+        var timeoutId = null;
+        ctx.turn.jsonTimedOut = false;
+        if (controller) ctx.turn.controller = controller;
+        var requestOptions = {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
             body: JSON.stringify(body)
-        })
+        };
+        if (controller) requestOptions.signal = controller.signal;
+
+        var fetchPromise = fetch(MISC_API_BASE + "/gibush_ai_ask", requestOptions)
             .then(function (res) {
                 return res.json().then(function (data) {
                     return { ok: res.ok, status: res.status, data: data };
                 });
-            })
+            });
+        var timeoutPromise = new Promise(function (resolve, reject) {
+            timeoutId = setTimeout(function () {
+                ctx.turn.jsonTimedOut = true;
+                if (controller) {
+                    try { controller.abort(); } catch (e) { /* ignore */ }
+                }
+                reject(new Error(GIBUSH_AI_CHAT_JSON_TIMEOUT_MESSAGE));
+            }, GIBUSH_AI_CHAT_JSON_TIMEOUT_MS);
+        });
+
+        return Promise.race([fetchPromise, timeoutPromise])
             .then(function (result) {
+                if (!isCurrentTurnContext(ctx)) return;
                 if (!result.ok) {
+                    if (isPendingAiTurn(result.data)) {
+                        return { pending: true };
+                    }
                     handleAskFailure(askErrorText(result.data, result.status), ctx);
-                    return;
+                    return { terminal: true };
                 }
                 handleAskSuccess(result.data, ctx);
+                return { terminal: true };
+            })
+            .catch(function (e) {
+                if (!isCurrentTurnContext(ctx) || ctx.turn.cancelled) return;
+                // The request may have reached the idempotent owner even when
+                // its response was lost. Re-attach instead of cancelling or
+                // presenting a healthy pending turn as a failure.
+                return { pending: true, transportFailure: true };
+            })
+            .finally(function () {
+                if (timeoutId) clearTimeout(timeoutId);
+                if (ctx.turn.controller === controller) ctx.turn.controller = null;
             });
+    }
+
+    function runTurnTransport(body, ctx) {
+        if (!isCurrentTurnContext(ctx)) return Promise.resolve();
+        if (Date.now() >= ctx.turn.deadlineAt) {
+            expireActiveTurn(ctx.turn);
+            return Promise.resolve();
+        }
+
+        var streamResult = ctx.streamUnavailable
+            ? Promise.resolve({ needsFallback: true, retryable: false })
+            : streamAskWithRetry(body, ctx);
+
+        return streamResult.then(function (outcome) {
+            if (!isCurrentTurnContext(ctx)) return;
+            if (!outcome || !outcome.needsFallback) return outcome;
+            if (outcome.retryable === false) ctx.streamUnavailable = true;
+
+            ctx.jsonPollAttempts = (ctx.jsonPollAttempts || 0) + 1;
+            setSpinnerText("מתחבר מחדש לאותה בקשה…");
+            return jsonAsk(body, ctx).then(function (jsonOutcome) {
+                if (!isCurrentTurnContext(ctx)) return;
+                if (!jsonOutcome || !jsonOutcome.pending) return jsonOutcome;
+
+                setSpinnerText("הבקשה עדיין בעיבוד — בודק שוב…");
+                if (jsonOutcome.transportFailure) {
+                    ctx.transportFailureStreak = (ctx.transportFailureStreak || 0) + 1;
+                } else {
+                    ctx.transportFailureStreak = 0;
+                }
+                var reattachDelay = jsonOutcome.transportFailure
+                    ? Math.min(
+                        10000,
+                        GIBUSH_AI_CHAT_PENDING_REATTACH_DELAY_MS * Math.pow(
+                            2,
+                            Math.min(ctx.transportFailureStreak, 4)
+                        )
+                    )
+                    : GIBUSH_AI_CHAT_PENDING_REATTACH_DELAY_MS;
+                return new Promise(function (resolve) {
+                    window.setTimeout(resolve, reattachDelay);
+                }).then(function () {
+                    if (!isCurrentTurnContext(ctx)) return;
+                    if (Date.now() >= ctx.turn.deadlineAt) {
+                        expireActiveTurn(ctx.turn);
+                        return;
+                    }
+                    // Prefer SSE again when supported. The body still carries
+                    // the original client_turn_id, so this only re-attaches.
+                    return runTurnTransport(body, ctx);
+                });
+            });
+        });
     }
 
     function postAsk(body, options) {
         options = options || {};
+        var turn = {
+            id: gibushAiChatNewTurnId(),
+            epoch: conversationEpoch,
+            deadlineAt: Date.now() + GIBUSH_AI_CHAT_TURN_DEADLINE_MS,
+            deadlineTimer: null,
+            overallTimedOut: false,
+            controller: null,
+            cancelled: false,
+            cancelAttempts: 0,
+            cancelInFlight: false,
+            cancelAcknowledged: false,
+            ctx: null
+        };
+        body.client_turn_id = turn.id;
         var ctx = {
             diagnostic: !!options.diagnostic,
             teamNumber: options.teamNumber || null,
             presetId: options.presetId || null,
-            expensive: !!body.expensive
+            expensive: !!body.expensive,
+            epoch: turn.epoch,
+            turn: turn,
+            streamedAnswer: "",
+            liveAssistantEl: null,
+            conversationReset: false,
+            jsonPollAttempts: 0,
+            transportFailureStreak: 0,
+            streamUnavailable: false,
+            renderScheduled: false
         };
+        turn.ctx = ctx;
+        activeTurn = turn;
 
         setComposerBusy(true);
         setSpinnerText(ctx.expensive || ctx.diagnostic
             ? "בודק את הנתונים (מודל מורחב)…"
             : "בודק את הנתונים…");
         spinLine.style.display = "flex";
+        turn.deadlineTimer = window.setTimeout(function () {
+            expireActiveTurn(turn);
+        }, GIBUSH_AI_CHAT_TURN_DEADLINE_MS);
 
-        streamAsk(body, ctx)
-            .then(function (outcome) {
-                if (outcome && outcome.needsFallback) {
-                    return jsonAsk(body, ctx);
-                }
-            })
+        runTurnTransport(body, ctx)
             .catch(function (e) {
+                if (!isCurrentTurnContext(ctx) || turn.cancelled) return;
                 handleAskFailure((e && e.message) || String(e), ctx);
             })
             .finally(function () {
+                clearTurnDeadline(turn);
+                if (activeTurn !== turn) return;
+                activeTurn = null;
                 setComposerBusy(false);
                 spinLine.style.display = "none";
                 messages.scrollTop = messages.scrollHeight;
@@ -1248,7 +1688,7 @@ function ensureGibushAiChatWidget() {
         clearPendingAttachment();
         messages.scrollTop = messages.scrollHeight;
 
-        // Free text leaves diagnostic UI mode but keeps the OpenAI thread.
+        // Free text leaves diagnostic mode and resumes the separate free thread.
         var priorDiagMode = gibushAiChatLoadDiagnosticMode();
         var continuedFromDiagnostic = false;
         if (priorDiagMode) {
@@ -1278,7 +1718,7 @@ function ensureGibushAiChatWidget() {
         }
         var previousResponseId = null;
         try {
-            previousResponseId = localStorage.getItem(GIBUSH_AI_CHAT_STORAGE_KEY);
+            previousResponseId = localStorage.getItem(gibushAiChatFreeConversationStorageKey());
         } catch (e) { /* ignore */ }
         if (previousResponseId) {
             body.previous_response_id = previousResponseId;
@@ -1288,6 +1728,20 @@ function ensureGibushAiChatWidget() {
 
     function sendDiagnostic(preset, teamNumber) {
         if (requestInFlight || !preset || !teamNumber) return;
+        // Read the old context before changing the banner. A response id is
+        // valid only for the exact same team + preset; either boundary starts
+        // a new diagnostic thread.
+        var previousMode = gibushAiChatLoadDiagnosticMode();
+        var continueDiagnostic = gibushAiChatDiagnosticContextMatches(
+            previousMode,
+            teamNumber,
+            preset.id
+        );
+        var diagnosticResponseId = null;
+        if (continueDiagnostic) {
+            diagnosticResponseId = previousMode.response_id || null;
+        }
+
         var history = gibushAiChatLoadHistory();
         var visibleText = "צוות " + teamNumber + " · " + preset.label + "\n\n" + preset.user_prompt;
         var userMessage = {
@@ -1301,7 +1755,7 @@ function ensureGibushAiChatWidget() {
         history.push(userMessage);
         gibushAiChatSaveHistory(history);
         gibushAiChatRenderMessage(messages, userMessage);
-        gibushAiChatEnterDiagnosticMode(teamNumber, preset);
+        gibushAiChatEnterDiagnosticMode(teamNumber, preset, diagnosticResponseId);
         refreshDiagModeBar();
         refreshPresetChips();
         messages.scrollTop = messages.scrollHeight;
@@ -1314,26 +1768,8 @@ function ensureGibushAiChatWidget() {
             expensive: true
         };
 
-        // Continue diagnostic thread only when still in diagnostic mode for the
-        // same team (or last assistant was that diagnostic). Otherwise start fresh.
-        var mode = gibushAiChatLoadDiagnosticMode();
-        var lastAssistant = gibushAiChatLastAssistantMessage(history.slice(0, -1));
-        var continueDiagnostic = !!(
-            mode &&
-            String(mode.team_number) === String(teamNumber)
-        ) || !!(
-            lastAssistant &&
-            lastAssistant.diagnostic &&
-            String(lastAssistant.team_number || "") === String(teamNumber)
-        );
-        if (continueDiagnostic) {
-            var diagnosticResponseId = null;
-            try {
-                diagnosticResponseId = localStorage.getItem(GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY);
-            } catch (e) { /* ignore */ }
-            if (diagnosticResponseId) {
-                body.previous_response_id = diagnosticResponseId;
-            }
+        if (diagnosticResponseId) {
+            body.previous_response_id = diagnosticResponseId;
         }
 
         postAsk(body, {
@@ -1356,6 +1792,8 @@ function ensureGibushAiChatWidget() {
     messages.scrollTop = messages.scrollHeight;
 
     newConvoBtn.addEventListener("click", function () {
+        conversationEpoch += 1;
+        cancelActiveTurn(true);
         gibushAiChatNewConversation(messages);
         setExpensiveArmed(false);
         clearPendingAttachment();
@@ -1435,7 +1873,13 @@ function ensureGibushAiChatWidget() {
         }
     }
 
-    sendBtn.addEventListener("click", sendMessage);
+    sendBtn.addEventListener("click", function () {
+        if (requestInFlight) {
+            cancelActiveTurn(false);
+            return;
+        }
+        sendMessage();
+    });
     // Enter inserts a newline (phone-friendly); send is only via the button.
 
     textarea.focus();
