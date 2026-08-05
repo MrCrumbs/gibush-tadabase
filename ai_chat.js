@@ -728,10 +728,13 @@ function ensureGibushAiChatWidget() {
     sendBtn.type = "button";
     sendBtn.id = "gibush-ai-chat-send";
     sendBtn.textContent = "שלח";
+    var actionsRow = document.createElement("div");
+    actionsRow.className = "gaic-actions";
+    actionsRow.appendChild(attachBtn);
+    actionsRow.appendChild(expensiveBtn);
+    actionsRow.appendChild(sendBtn);
     inputRow.appendChild(textarea);
-    inputRow.appendChild(attachBtn);
-    inputRow.appendChild(expensiveBtn);
-    inputRow.appendChild(sendBtn);
+    inputRow.appendChild(actionsRow);
     inputRow.appendChild(fileInput);
 
     var composerPresetRow = null;

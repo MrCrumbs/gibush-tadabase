@@ -290,13 +290,22 @@ article:has(#gibush-ai-chat-root),
 }
 #gibush-ai-chat-shell .gaic-input-row {
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    align-items: flex-end;
+    align-items: stretch;
     padding: 10px 12px;
     border: 1px solid var(--gaic-border);
     border-radius: 18px;
     background: #fff;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+#gibush-ai-chat-shell .gaic-actions {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
 }
 #gibush-ai-chat-shell button#gibush-ai-chat-attach {
     text-align: center;
@@ -321,11 +330,13 @@ article:has(#gibush-ai-chat-root),
     cursor: not-allowed;
 }
 #gibush-ai-chat-shell textarea#gibush-ai-chat-input {
-    flex: 1;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
     resize: none;
     min-height: 44px;
     max-height: 160px;
-    padding: 10px 8px;
+    padding: 4px 2px 0;
     font-size: 15px;
     font-family: inherit;
     border: none;
