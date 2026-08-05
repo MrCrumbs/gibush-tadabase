@@ -1022,25 +1022,12 @@ function ensureGibushAiChatWidget() {
         if (delta == null) delta = event.text;
         if (delta == null) delta = event.answer_delta;
         if (delta == null || delta === "") return;
+        // Keep consuming streamed output so the connection stays live and a
+        // completed answer can still be recovered if the terminal event omits
+        // its text. Do not render each provider token: Hebrew output often
+        // arrives in tiny deltas, which makes the answer feel much slower than
+        // an atomic reveal. handleAskSuccess renders the complete answer once.
         ctx.streamedAnswer = (ctx.streamedAnswer || "") + String(delta);
-        if (ctx.renderScheduled) return;
-        ctx.renderScheduled = true;
-        var schedule = window.requestAnimationFrame || function (callback) {
-            return window.setTimeout(callback, 16);
-        };
-        schedule(function () {
-            ctx.renderScheduled = false;
-            if (!isCurrentTurnContext(ctx) || !ctx.streamedAnswer) return;
-            if (!ctx.liveAssistantEl) {
-                ctx.liveAssistantEl = gibushAiChatRenderMessage(messages, {
-                    role: "assistant",
-                    text: ""
-                });
-                ctx.liveAssistantEl.setAttribute("data-gaic-turn-id", ctx.turn.id);
-            }
-            ctx.liveAssistantEl.innerHTML = gibushAiChatFormatMarkdown(ctx.streamedAnswer);
-            messages.scrollTop = messages.scrollHeight;
-        });
     }
 
     function clearResponseIdForContext(ctx) {
@@ -1627,8 +1614,7 @@ function ensureGibushAiChatWidget() {
             conversationReset: false,
             jsonPollAttempts: 0,
             transportFailureStreak: 0,
-            streamUnavailable: false,
-            renderScheduled: false
+            streamUnavailable: false
         };
         turn.ctx = ctx;
         activeTurn = turn;
