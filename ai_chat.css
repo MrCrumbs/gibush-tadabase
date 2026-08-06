@@ -70,6 +70,14 @@ article:has(#gibush-ai-chat-root),
     font-size: 12px;
     color: var(--gaic-muted);
 }
+#gibush-ai-chat-shell .gaic-scope-deny {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #a33;
+}
+#gibush-ai-chat-shell.gaic-access-denied .gaic-composer {
+    opacity: 0.72;
+}
 #gibush-ai-chat-shell .gaic-head-actions button {
     border: 1px solid var(--gaic-border);
     background: #fff;

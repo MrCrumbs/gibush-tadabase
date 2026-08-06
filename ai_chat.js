@@ -12,10 +12,11 @@
  *       ensureGibushAiChatWidget();
  *   });
  *
- * SCOPING: set GIBUSH_AI_CHAT_SCOPED_MODE below.
- *   - true  (field-team page): also set GIBUSH_AI_CHAT_TEAM_NUMBER (usually
- *     "{loggedInUser.צוות שטח}") — every question is scoped to that team.
- *   - false (commander/admin page): team number is ignored; full access.
+ * ACCESS: merge fields resolve per logged-in user on one shared page:
+ *   - GIBUSH_AI_CHAT_USER_ROLE = "{loggedInUser.role}"
+ *   - GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}" (required for מגבש)
+ * Modes: מגבש → live_team; גישה לארכיון → archive; מנהל/מפקד גיבוש → full.
+ * Unknown role or מגבש without team → composer disabled ("אין הרשאה").
  *
  * EXPENSIVE MODEL: the "$" toggle next to Send arms the next turn(s) to use
  * OPENAI_MODEL_GIBUSH_AGENT_EXPENSIVE (gpt-5.6-sol) instead of the default
@@ -41,11 +42,17 @@
 var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var MISC_API_BASE = "https://misc-ten.vercel.app";
 
-// true = field-team page (scoped). false = commander/admin (no limits).
-var GIBUSH_AI_CHAT_SCOPED_MODE = false;
-
-// Only used when GIBUSH_AI_CHAT_SCOPED_MODE is true.
+// Tadabase merge fields — resolve per logged-in user.
+var GIBUSH_AI_CHAT_USER_ROLE = "{loggedInUser.role}";
 var GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}";
+
+// Exact Tadabase Users.role strings → access mode (must match server).
+var GIBUSH_AI_CHAT_ROLE_MODES = {
+    "מגבש": "live_team",
+    "גישה לארכיון": "archive",
+    "מנהל": "full",
+    "מפקד גיבוש": "full"
+};
 
 var GIBUSH_AI_CHAT_STORAGE_KEY = "gibushAiChat_previousResponseId";
 // Legacy diagnostic token key is removed on write/clear. New diagnostic state
@@ -183,25 +190,99 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
     }
 ];
 
-function gibushAiChatResolvedTeamNumber() {
-    if (!GIBUSH_AI_CHAT_SCOPED_MODE) {
-        return null;
-    }
-    var raw = (GIBUSH_AI_CHAT_TEAM_NUMBER == null) ? "" : String(GIBUSH_AI_CHAT_TEAM_NUMBER).trim();
-    // Tadabase leaves the literal "{loggedInUser...}" merge-field text in place
-    // if it fails to resolve (e.g. previewed outside a real session) - treat
-    // that as "no scope" rather than sending a bogus team_number.
-    if (!raw || raw.indexOf("{") === 0 || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "all") {
+function gibushAiChatResolvedRole() {
+    var raw = (GIBUSH_AI_CHAT_USER_ROLE == null) ? "" : String(GIBUSH_AI_CHAT_USER_ROLE).trim();
+    if (!raw || raw.indexOf("{") === 0 || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "null") {
         return null;
     }
     return raw;
 }
 
-function gibushAiChatFreeConversationStorageKey() {
+function gibushAiChatResolvedTeamNumber() {
+    var raw = (GIBUSH_AI_CHAT_TEAM_NUMBER == null) ? "" : String(GIBUSH_AI_CHAT_TEAM_NUMBER).trim();
+    // Tadabase leaves the literal "{loggedInUser...}" merge-field text in place
+    // if it fails to resolve (e.g. previewed outside a real session).
+    if (!raw || raw.indexOf("{") === 0 || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "null" || raw.toLowerCase() === "all") {
+        return null;
+    }
+    return raw;
+}
+
+/**
+ * Resolve UI/API access from merge fields. Fail closed when role is missing/
+ * unknown or מגבש has no צוות שטח.
+ * Returns { role, mode, teamNumber, allowed, denyReason, scopeLabel }.
+ */
+function gibushAiChatResolveAccess() {
+    var role = gibushAiChatResolvedRole();
     var teamNumber = gibushAiChatResolvedTeamNumber();
-    return GIBUSH_AI_CHAT_STORAGE_KEY + ":" + (
-        teamNumber ? "team-" + String(teamNumber) : "unscoped"
-    );
+    if (!role) {
+        return {
+            role: null,
+            mode: null,
+            teamNumber: teamNumber,
+            allowed: false,
+            denyReason: "אין הרשאה — תפקיד המשתמש לא זוהה.",
+            scopeLabel: "אין הרשאה"
+        };
+    }
+    var mode = GIBUSH_AI_CHAT_ROLE_MODES[role];
+    if (!mode) {
+        return {
+            role: role,
+            mode: null,
+            teamNumber: teamNumber,
+            allowed: false,
+            denyReason: "אין הרשאה — תפקיד זה אינו מורשה לשימוש ב-AI.",
+            scopeLabel: "אין הרשאה"
+        };
+    }
+    if (mode === "live_team" && !teamNumber) {
+        return {
+            role: role,
+            mode: mode,
+            teamNumber: null,
+            allowed: false,
+            denyReason: "אין הרשאה — למגבש חסר צוות שטח.",
+            scopeLabel: "אין הרשאה"
+        };
+    }
+    var scopeLabel = "כל הצוותים";
+    if (mode === "live_team") {
+        scopeLabel = "צוות " + teamNumber;
+    } else if (mode === "archive") {
+        scopeLabel = "ארכיון בלבד";
+    }
+    return {
+        role: role,
+        mode: mode,
+        teamNumber: teamNumber,
+        allowed: true,
+        denyReason: null,
+        scopeLabel: scopeLabel
+    };
+}
+
+/** Payload scope object for every ask/stream request. Null if access denied. */
+function gibushAiChatScopePayload() {
+    var access = gibushAiChatResolveAccess();
+    if (!access.allowed) return null;
+    var scope = { role: access.role };
+    if (access.mode === "live_team" && access.teamNumber) {
+        scope.team_number = String(access.teamNumber);
+    }
+    return scope;
+}
+
+function gibushAiChatFreeConversationStorageKey() {
+    var access = gibushAiChatResolveAccess();
+    if (!access.allowed) {
+        return GIBUSH_AI_CHAT_STORAGE_KEY + ":denied";
+    }
+    if (access.mode === "live_team") {
+        return GIBUSH_AI_CHAT_STORAGE_KEY + ":live_team-" + String(access.teamNumber);
+    }
+    return GIBUSH_AI_CHAT_STORAGE_KEY + ":" + access.mode;
 }
 
 /**
@@ -351,8 +432,9 @@ function gibushAiChatProcessImageBlob(blob) {
 }
 
 function gibushAiChatDiagnosticsEnabled() {
-    // Preset chips are for the unscoped commander/admin page only.
-    return !GIBUSH_AI_CHAT_SCOPED_MODE;
+    // Live diagnostic presets: full (picker) and live_team (fixed team, no picker).
+    var access = gibushAiChatResolveAccess();
+    return !!(access.allowed && (access.mode === "full" || access.mode === "live_team"));
 }
 
 function gibushAiChatLoadDiagnosticMode() {
@@ -658,12 +740,18 @@ function ensureGibushAiChatWidget() {
     var h2 = document.createElement("h2");
     h2.id = "gibush-ai-chat-title";
     h2.textContent = "שאל את ה-AI";
+    var access = gibushAiChatResolveAccess();
     var scopeLine = document.createElement("div");
     scopeLine.className = "gaic-scope-line";
-    var resolvedTeam = gibushAiChatResolvedTeamNumber();
-    scopeLine.textContent = resolvedTeam ? ("מרחב נתונים: צוות " + resolvedTeam) : "מרחב נתונים: כל הצוותים";
+    scopeLine.textContent = "מרחב נתונים: " + access.scopeLabel;
     headLeft.appendChild(h2);
     headLeft.appendChild(scopeLine);
+    if (!access.allowed) {
+        var denyLine = document.createElement("div");
+        denyLine.className = "gaic-scope-deny";
+        denyLine.textContent = access.denyReason || "אין הרשאה";
+        headLeft.appendChild(denyLine);
+    }
 
     var headMeta = document.createElement("div");
     headMeta.className = "gaic-head-meta";
@@ -777,7 +865,8 @@ function ensureGibushAiChatWidget() {
     var teamPicker = null;
     var pendingDiagnosticPreset = null;
     var selectedDiagnosticTeam = null;
-    if (gibushAiChatDiagnosticsEnabled()) {
+    // Team picker only for full access; live_team starts diagnostics on its fixed team.
+    if (access.allowed && access.mode === "full") {
         teamPicker = document.createElement("div");
         teamPicker.id = "gibush-ai-chat-team-picker";
         teamPicker.setAttribute("dir", "rtl");
@@ -804,6 +893,15 @@ function ensureGibushAiChatWidget() {
             teamBtn.setAttribute("data-team", String(teamN));
             teamGrid.appendChild(teamBtn);
         }
+    }
+
+    if (!access.allowed) {
+        shell.classList.add("gaic-access-denied");
+        textarea.disabled = true;
+        sendBtn.disabled = true;
+        expensiveBtn.disabled = true;
+        attachBtn.disabled = true;
+        textarea.placeholder = "אין הרשאה";
     }
 
     // Clear Tadabase's empty HTML shell content so the chat owns the area.
@@ -884,6 +982,21 @@ function ensureGibushAiChatWidget() {
 
     function setComposerBusy(busy) {
         requestInFlight = !!busy;
+        var accessOk = gibushAiChatResolveAccess().allowed;
+        if (!accessOk) {
+            sendBtn.disabled = true;
+            sendBtn.textContent = "שלח";
+            expensiveBtn.disabled = true;
+            attachBtn.disabled = true;
+            if (attachClearBtn) attachClearBtn.disabled = true;
+            if (diagModeExitBtn) diagModeExitBtn.disabled = true;
+            textarea.disabled = true;
+            var deniedChips = shell.querySelectorAll("button.gaic-preset-chip");
+            for (var di = 0; di < deniedChips.length; di++) {
+                deniedChips[di].disabled = true;
+            }
+            return;
+        }
         // While busy this becomes a Stop button. It deliberately remains
         // clickable so the browser can abort and ask the backend to cancel.
         sendBtn.disabled = false;
@@ -919,6 +1032,21 @@ function ensureGibushAiChatWidget() {
      * Exit diagnostic UI mode without moving its token into free chat.
      * If announce=true, append a short notice bubble to the visible history.
      */
+    function freeChatHandoffNotice() {
+        var currentAccess = gibushAiChatResolveAccess();
+        if (currentAccess.mode === "live_team") {
+            return (
+                "יצאת ממצב אבחון. ההמשך בשיחה חופשית על צוות " +
+                currentAccess.teamNumber +
+                " (נתונים חיים בלבד); שיחות האבחון נשמרות בנפרד כדי למנוע ערבוב בין הקשרים."
+            );
+        }
+        return (
+            "יצאת ממצב אבחון. ההמשך בשיחה חופשית (ארכיון + כל הכלים); " +
+            "שיחות האבחון נשמרות בנפרד כדי למנוע ערבוב בין הקשרים."
+        );
+    }
+
     function exitDiagnosticMode(announce) {
         var wasActive = !!gibushAiChatLoadDiagnosticMode();
         gibushAiChatExitDiagnosticMode();
@@ -926,8 +1054,7 @@ function ensureGibushAiChatWidget() {
         if (announce && wasActive) {
             var notice = {
                 role: "assistant",
-                text: "יצאת ממצב אבחון. ההמשך בשיחה חופשית (ארכיון + כל הכלים); " +
-                    "שיחות האבחון נשמרות בנפרד כדי למנוע ערבוב בין הקשרים."
+                text: freeChatHandoffNotice()
             };
             var history = gibushAiChatLoadHistory();
             history.push(notice);
@@ -946,14 +1073,19 @@ function ensureGibushAiChatWidget() {
     function fillPresetHost(host) {
         if (!host) return;
         host.innerHTML = "";
+        var currentAccess = gibushAiChatResolveAccess();
         GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.forEach(function (preset) {
             var chip = document.createElement("button");
             chip.type = "button";
             chip.className = "gaic-preset-chip";
             chip.textContent = preset.label;
             chip.setAttribute("data-preset", preset.id);
-            chip.disabled = requestInFlight;
+            chip.disabled = requestInFlight || !currentAccess.allowed;
             chip.addEventListener("click", function () {
+                if (currentAccess.mode === "live_team" && currentAccess.teamNumber) {
+                    sendDiagnostic(preset, currentAccess.teamNumber);
+                    return;
+                }
                 openTeamPicker(preset);
             });
             host.appendChild(chip);
@@ -1649,6 +1781,8 @@ function ensureGibushAiChatWidget() {
 
     function sendMessage() {
         if (requestInFlight) return;
+        var currentAccess = gibushAiChatResolveAccess();
+        if (!currentAccess.allowed) return;
         var question = (textarea.value || "").trim();
         var attachment = pendingAttachment;
         if (!question && !attachment) return;
@@ -1686,12 +1820,22 @@ function ensureGibushAiChatWidget() {
 
         var apiQuestion = question || visibleText;
         if (continuedFromDiagnostic && priorDiagMode) {
-            apiQuestion =
-                "המשך משיחת אבחון קודמת (צוות " + priorDiagMode.team_number +
-                " · " + priorDiagMode.label +
-                "). המשתמש עבר לשיחה חופשית — ניתן להשתמש בארכיון ובכלים המלאים, " +
-                "ולענות על אותה שאלת אבחון בהקשר חדש אם מבקשים.\n\n" +
-                apiQuestion;
+            if (currentAccess.mode === "live_team") {
+                apiQuestion =
+                    "המשך משיחת אבחון קודמת (צוות " + priorDiagMode.team_number +
+                    " · " + priorDiagMode.label +
+                    "). המשתמש עבר לשיחה חופשית — הגישה נשארת לנתונים חיים של צוות " +
+                    currentAccess.teamNumber +
+                    " בלבד (ללא ארכיון וללא צוותים אחרים).\n\n" +
+                    apiQuestion;
+            } else {
+                apiQuestion =
+                    "המשך משיחת אבחון קודמת (צוות " + priorDiagMode.team_number +
+                    " · " + priorDiagMode.label +
+                    "). המשתמש עבר לשיחה חופשית — ניתן להשתמש בארכיון ובכלים המלאים, " +
+                    "ולענות על אותה שאלת אבחון בהקשר חדש אם מבקשים.\n\n" +
+                    apiQuestion;
+            }
         }
 
         var body = { question: apiQuestion };
@@ -1701,10 +1845,7 @@ function ensureGibushAiChatWidget() {
         if (useExpensive) {
             body.expensive = true;
         }
-        var teamNumber = gibushAiChatResolvedTeamNumber();
-        if (teamNumber) {
-            body.scope = { team_number: teamNumber };
-        }
+        body.scope = gibushAiChatScopePayload();
         var previousResponseId = null;
         try {
             previousResponseId = localStorage.getItem(gibushAiChatFreeConversationStorageKey());
@@ -1717,6 +1858,11 @@ function ensureGibushAiChatWidget() {
 
     function sendDiagnostic(preset, teamNumber) {
         if (requestInFlight || !preset || !teamNumber) return;
+        var currentAccess = gibushAiChatResolveAccess();
+        if (!currentAccess.allowed || !gibushAiChatDiagnosticsEnabled()) return;
+        if (currentAccess.mode === "live_team" && String(teamNumber) !== String(currentAccess.teamNumber)) {
+            return;
+        }
         // Read the old context before changing the banner. A response id is
         // valid only for the exact same team + preset; either boundary starts
         // a new diagnostic thread.
@@ -1749,11 +1895,18 @@ function ensureGibushAiChatWidget() {
         refreshPresetChips();
         messages.scrollTop = messages.scrollHeight;
 
+        var scope = gibushAiChatScopePayload();
+        if (!scope) return;
+        // full users still send the picker-chosen team; live_team already has it.
+        if (currentAccess.mode === "full") {
+            scope.team_number = String(teamNumber);
+        }
+
         var body = {
             question: preset.user_prompt,
             diagnostic_preset: preset.id,
             team_number: String(teamNumber),
-            scope: { team_number: String(teamNumber) },
+            scope: scope,
             expensive: true
         };
 
