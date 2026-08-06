@@ -15,8 +15,10 @@
  * ACCESS: merge fields resolve per logged-in user on one shared page:
  *   - GIBUSH_AI_CHAT_USER_ROLE = "{loggedInUser.role}"
  *   - GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}" (required for מגבש)
+ *   - GIBUSH_AI_CHAT_USER_NAME = "{loggedInUser.name}"
+ *   - GIBUSH_AI_CHAT_USER_RECORD_ID = "{loggedInUser.Record ID}" (required for מגבש)
  * Modes: מגבש → live_team; גישה לארכיון → archive; מנהל/מפקד גיבוש → full.
- * Unknown role or מגבש without team → composer disabled ("אין הרשאה").
+ * Unknown role, מגבש without team, or מגבש without record id → "אין הרשאה".
  *
  * EXPENSIVE MODEL: the "$" toggle next to Send arms the next turn(s) to use
  * OPENAI_MODEL_GIBUSH_AGENT_EXPENSIVE (gpt-5.6-sol) instead of the default
@@ -45,6 +47,8 @@ var MISC_API_BASE = "https://misc-ten.vercel.app";
 // Tadabase merge fields — resolve per logged-in user.
 var GIBUSH_AI_CHAT_USER_ROLE = "{loggedInUser.role}";
 var GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}";
+var GIBUSH_AI_CHAT_USER_NAME = "{loggedInUser.name}";
+var GIBUSH_AI_CHAT_USER_RECORD_ID = "{loggedInUser.Record ID}";
 
 // Exact Tadabase Users.role strings → access mode (must match server).
 var GIBUSH_AI_CHAT_ROLE_MODES = {
@@ -208,19 +212,39 @@ function gibushAiChatResolvedTeamNumber() {
     return raw;
 }
 
+function gibushAiChatResolvedUserName() {
+    var raw = (GIBUSH_AI_CHAT_USER_NAME == null) ? "" : String(GIBUSH_AI_CHAT_USER_NAME).trim();
+    if (!raw || raw.indexOf("{") === 0 || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "null") {
+        return null;
+    }
+    return raw;
+}
+
+function gibushAiChatResolvedUserRecordId() {
+    var raw = (GIBUSH_AI_CHAT_USER_RECORD_ID == null) ? "" : String(GIBUSH_AI_CHAT_USER_RECORD_ID).trim();
+    if (!raw || raw.indexOf("{") === 0 || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "null") {
+        return null;
+    }
+    return raw;
+}
+
 /**
  * Resolve UI/API access from merge fields. Fail closed when role is missing/
- * unknown or מגבש has no צוות שטח.
- * Returns { role, mode, teamNumber, allowed, denyReason, scopeLabel }.
+ * unknown, or מגבש lacks צוות שטח / Users record id.
+ * Returns { role, mode, teamNumber, userName, userRecordId, allowed, denyReason, scopeLabel }.
  */
 function gibushAiChatResolveAccess() {
     var role = gibushAiChatResolvedRole();
     var teamNumber = gibushAiChatResolvedTeamNumber();
+    var userName = gibushAiChatResolvedUserName();
+    var userRecordId = gibushAiChatResolvedUserRecordId();
     if (!role) {
         return {
             role: null,
             mode: null,
             teamNumber: teamNumber,
+            userName: userName,
+            userRecordId: userRecordId,
             allowed: false,
             denyReason: "אין הרשאה — תפקיד המשתמש לא זוהה.",
             scopeLabel: "אין הרשאה"
@@ -232,6 +256,8 @@ function gibushAiChatResolveAccess() {
             role: role,
             mode: null,
             teamNumber: teamNumber,
+            userName: userName,
+            userRecordId: userRecordId,
             allowed: false,
             denyReason: "אין הרשאה — תפקיד זה אינו מורשה לשימוש ב-AI.",
             scopeLabel: "אין הרשאה"
@@ -242,8 +268,22 @@ function gibushAiChatResolveAccess() {
             role: role,
             mode: mode,
             teamNumber: null,
+            userName: userName,
+            userRecordId: userRecordId,
             allowed: false,
             denyReason: "אין הרשאה — למגבש חסר צוות שטח.",
+            scopeLabel: "אין הרשאה"
+        };
+    }
+    if (mode === "live_team" && !userRecordId) {
+        return {
+            role: role,
+            mode: mode,
+            teamNumber: teamNumber,
+            userName: userName,
+            userRecordId: null,
+            allowed: false,
+            denyReason: "אין הרשאה — למגבש חסר מזהה משתמש.",
             scopeLabel: "אין הרשאה"
         };
     }
@@ -257,6 +297,8 @@ function gibushAiChatResolveAccess() {
         role: role,
         mode: mode,
         teamNumber: teamNumber,
+        userName: userName,
+        userRecordId: userRecordId,
         allowed: true,
         denyReason: null,
         scopeLabel: scopeLabel
@@ -271,7 +313,31 @@ function gibushAiChatScopePayload() {
     if (access.mode === "live_team" && access.teamNumber) {
         scope.team_number = String(access.teamNumber);
     }
+    if (access.userName) {
+        scope.user_name = access.userName;
+    }
+    if (access.userRecordId) {
+        scope.user_record_id = String(access.userRecordId);
+    }
     return scope;
+}
+
+function gibushAiChatWelcomeCopy(access) {
+    var name = access && access.userName ? access.userName : null;
+    var hello = name ? ("שלום, " + name) : "שלום";
+    var detail = "שאל על מוערכים, ציונים, ראיונות, הערכות שטח או מחזורים קודמים. "
+    if (!access || !access.allowed) {
+        return { title: hello, detail: (access && access.denyReason) || "אין הרשאה" };
+    }
+    if (access.mode === "live_team") {
+        detail = "אתה מגבש של צוות " + access.teamNumber +
+            ". באפשרותך לשאול על מוערכים, תרגילים, וכל נושא שמעניין אותך בנוגע לצוות שלך."
+    } else if (access.mode === "archive") {
+        detail = "הגישה שלך לארכיון בלבד — מחזורים קודמים בכל הצוותים. "
+    } else {
+        detail = "גישה מלאה לכל הצוותים, לנתונים חיים ולארכיון. "
+    }
+    return { title: hello, detail: detail };
 }
 
 function gibushAiChatFreeConversationStorageKey() {
@@ -516,13 +582,14 @@ function gibushAiChatDiagnosticModeLabel(mode) {
 }
 
 function gibushAiChatRenderEmpty(container) {
+    var access = gibushAiChatResolveAccess();
+    var welcome = gibushAiChatWelcomeCopy(access);
     var empty = document.createElement("div");
     empty.className = "gaic-empty";
     empty.id = "gibush-ai-chat-empty";
     empty.innerHTML =
-        "<h3>שאל את ה-AI</h3>" +
-        "<p>שאל על מוערכים, ציונים, ראיונות, הערכות שטח או מחזורים קודמים. " +
-        "אפשר גם להדביק צילום מסך (Ctrl+V) או לצרף תמונה.</p>";
+        "<h3>" + gibushAiChatEscapeHtml(welcome.title) + "</h3>" +
+        "<p>" + gibushAiChatEscapeHtml(welcome.detail) + "</p>";
     if (gibushAiChatDiagnosticsEnabled()) {
         var chipHost = document.createElement("div");
         chipHost.className = "gaic-preset-row gaic-preset-empty";
