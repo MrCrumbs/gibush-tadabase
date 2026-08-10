@@ -1008,7 +1008,9 @@ TB.render("component_3", function (data) {
           root.appendChild(teamPicker);
   
           var teamGrid = teamPicker.querySelector("#gibush-ai-chat-team-grid");
-          for (var teamN = 1; teamN <= 13; teamN++) {
+          // Keep in sync with misc helpers_gibush.MAX_TEAM_NUMBER (currently 14).
+          var maxTeamNumber = 14;
+          for (var teamN = 1; teamN <= maxTeamNumber; teamN++) {
               var teamBtn = document.createElement("button");
               teamBtn.type = "button";
               teamBtn.className = "gaic-team-btn";
