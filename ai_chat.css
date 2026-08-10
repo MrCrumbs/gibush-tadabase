@@ -20,7 +20,9 @@ article:has(#gibush-ai-chat-root),
     display: flex;
     justify-content: center;
     width: 100%;
+    height: calc(100dvh - 120px);
     min-height: calc(100vh - 120px);
+    max-height: calc(100dvh - 120px);
     background: var(--gaic-bg);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, "Noto Sans Hebrew", sans-serif;
     font-size: 16px;
@@ -39,7 +41,9 @@ article:has(#gibush-ai-chat-root),
     flex-direction: column;
     width: 100%;
     max-width: 820px;
-    min-height: calc(100vh - 120px);
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
     background: var(--gaic-panel);
     border-inline: 1px solid var(--gaic-border);
 }
@@ -55,6 +59,7 @@ article:has(#gibush-ai-chat-root),
     position: sticky;
     top: 0;
     z-index: 2;
+    flex-shrink: 0;
 }
 #gibush-ai-chat-shell .gaic-head h2 {
     margin: 0;
@@ -92,8 +97,11 @@ article:has(#gibush-ai-chat-root),
 }
 
 #gibush-ai-chat-messages {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     padding: 28px 20px 12px;
     display: flex;
     flex-direction: column;
@@ -237,6 +245,7 @@ article:has(#gibush-ai-chat-root),
     bottom: 0;
     padding: 12px 20px 20px;
     background: linear-gradient(to top, var(--gaic-panel) 70%, rgba(255, 255, 255, 0));
+    flex-shrink: 0;
 }
 #gibush-ai-chat-shell .gaic-spin-line {
     display: none;
@@ -629,10 +638,12 @@ article:has(#gibush-ai-chat-root),
 
 @media (max-width: 720px) {
     #gibush-ai-chat-root {
+        height: calc(100dvh - 80px);
         min-height: calc(100vh - 80px);
+        max-height: calc(100dvh - 80px);
     }
     #gibush-ai-chat-shell {
-        min-height: calc(100vh - 80px);
+        min-height: 0;
         border-inline: none;
     }
     #gibush-ai-chat-shell .gaic-head {
