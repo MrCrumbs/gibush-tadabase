@@ -25,7 +25,7 @@
  * Terra model. Leave it off for routine questions; turn it on for hard
  * suitability / "why" investigations that need deeper reasoning.
  *
- * SCREENSHOTS: paste (Ctrl/Cmd+V) or use the paperclip to attach one image
+ * SCREENSHOTS: paste (Ctrl/Cmd+V) or use the photo icon to attach one image
  * (png/jpeg/webp/gif). The client downscales before send; history keeps only
  * a small thumbnail (full image is not stored in localStorage).
  *
@@ -34,11 +34,12 @@
  * questions continue the same bounded server-side conversation. "שיחה חדשה"
  * clears it.
  *
- * DIAGNOSTIC MODE: preset chips run under a live-only, team-scoped prompt and
- * keep a separate conversation token. A banner shows the active mode with
- * "יציאה לשיחה חופשית". Exiting switches back to the independently stored
- * free-chat thread; diagnostic tokens never cross a team, preset, or mode
- * boundary.
+ * DIAGNOSTIC MODE: the clipboard icon opens a modal of preset analyses. After
+ * confirming a prompt (and team, when needed), it runs under a live-only,
+ * team-scoped prompt and keeps a separate conversation token. A banner shows
+ * the active mode with "יציאה לשיחה חופשית". Exiting switches back to the
+ * independently stored free-chat thread; diagnostic tokens never cross a team,
+ * preset, or mode boundary.
  */
 
 var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
@@ -104,12 +105,16 @@ function gibushAiChatNewTurnId() {
     });
 }
 
-// Preset ids + Hebrew labels/task text for the visible bubble only.
-// Backend DIAGNOSTIC_TASKS.user_prompt (English) is authoritative for the model.
+// Preset ids + Hebrew labels for the modal. `summary` is shown on confirm.
+// Backend DIAGNOSTIC_TASKS.user_prompt (English) is authoritative for the model;
+// `user_prompt` here is what the assessor sees in chat history.
 var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
     {
         id: "instability",
         label: "מי לא יציב?",
+        summary:
+            "מאתר מועמדים בשליש העליון/אמצעי עם תנודתיות חוזרת בזחילות ובספרינטים — " +
+            "לא נפילה בודדת, אלא זגזוג משמעותי בין מקצים.",
         user_prompt:
             "נתח את יציבות הביצועים של המועמדים הנמצאים בשליש העליון ובשליש האמצעי.\n" +
             "התמקד בזחילות ובספרינטים ובדוק את השינוי במיקום היחסי בין כל שני מקצים סמוכים.\n" +
@@ -125,6 +130,9 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
     {
         id: "late_fade",
         label: "מי נשחק בסוף?",
+        summary:
+            "מחפש שחיקה מאוחרת: ירידה בין השליש הראשון לאחרון בזחילות, ספרינטים " +
+            "ואלונקה סוציומטרית.",
         user_prompt:
             "נתח את המועמדים בשליש העליון ובשליש האמצעי וחפש ירידה תפקודית ככל שהגיבוש מתקדם.\n" +
             "השווה בין השליש הראשון לשליש האחרון בזחילות, בספרינטים ובאלונקה הסוציומטרית " +
@@ -140,6 +148,9 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
     {
         id: "recovery",
         label: "מי התאושש?",
+        summary:
+            "מאתר ירידה משמעותית ואחריה חזרה יציבה לרמה טובה יותר — " +
+            "לפחות שני מקצים רצופים משופרים שנשמרים.",
         user_prompt:
             "חפש בקרב המועמדים בשליש העליון ובשליש האמצעי מקרים של ירידה משמעותית " +
             "ולאחריה חזרה יציבה לרמת ביצוע טובה יותר.\n" +
@@ -154,6 +165,9 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
     {
         id: "hidden_risk",
         label: "סיכון נסתר בצמרת",
+        summary:
+            "בודק רק את השליש העליון ומחפש סיכון שהציון הכולל מסתיר — " +
+            "תנודתיות, שחיקה מאוחרת, תחום חלש או מקצים חסרים.",
         user_prompt:
             "נתח רק את המועמדים בשליש העליון.\n" +
             "זהה עד שלושה מועמדים שהדירוג הכללי שלהם גבוה, אך בתוך דפוס הביצועים מופיע " +
@@ -168,6 +182,9 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
     {
         id: "mid_potential",
         label: "פוטנציאל בשליש האמצעי",
+        summary:
+            "מחפש בשליש האמצעי מועמדים עם מגמת שיפור, יציבות או התאוששות " +
+            "שמצדיקים מבט נוסף — לא בזכות תרגיל חד־פעמי.",
         user_prompt:
             "נתח רק את המועמדים בשליש האמצעי.\n" +
             "זהה עד שלושה מועמדים עם פוטנציאל מבוסס להערכה מחודשת, " +
@@ -181,6 +198,9 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
     {
         id: "balance",
         label: "אחידות בין תרגילים",
+        summary:
+            "משווה בין סוגי מאמץ ומאתר פרופילים מאוזנים מול פערים גדולים " +
+            "בין זחילות, ספרינטים ואלונקה סוציומטרית.",
         user_prompt:
             "השווה בין ביצועי המועמדים בשליש העליון ובשליש האמצעי בפעילויות שהושקו " +
             "(זחילות, ספרינטים, אלונקה סוציומטרית, שקים, אלונקה רגילה — לפי הזמין).\n" +
@@ -193,6 +213,32 @@ var GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS = [
             "תן עדיפות לדפוס שחוזר בזחילות, בספרינטים ובאלונקה הסוציומטרית."
     }
 ];
+
+function gibushAiChatSvgIcon(kind) {
+    if (kind === "photo") {
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" ' +
+            'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+            'stroke-linejoin="round" aria-hidden="true">' +
+            '<rect x="3" y="5" width="18" height="14" rx="2"></rect>' +
+            '<circle cx="8.5" cy="10.5" r="1.5"></circle>' +
+            '<path d="M21 15l-5-5L5 21"></path>' +
+            "</svg>"
+        );
+    }
+    if (kind === "clipboard") {
+        return (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" ' +
+            'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+            'stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"></path>' +
+            '<rect x="9" y="3" width="6" height="4" rx="1"></rect>' +
+            '<path d="M9 12h6M9 16h6"></path>' +
+            "</svg>"
+        );
+    }
+    return "";
+}
 
 function gibushAiChatResolvedRole() {
     var raw = (GIBUSH_AI_CHAT_USER_ROLE == null) ? "" : String(GIBUSH_AI_CHAT_USER_ROLE).trim();
@@ -590,12 +636,6 @@ function gibushAiChatRenderEmpty(container) {
     empty.innerHTML =
         "<h3>" + gibushAiChatEscapeHtml(welcome.title) + "</h3>" +
         "<p>" + gibushAiChatEscapeHtml(welcome.detail) + "</p>";
-    if (gibushAiChatDiagnosticsEnabled()) {
-        var chipHost = document.createElement("div");
-        chipHost.className = "gaic-preset-row gaic-preset-empty";
-        chipHost.setAttribute("data-gaic-preset-host", "empty");
-        empty.appendChild(chipHost);
-    }
     container.appendChild(empty);
 }
 
@@ -866,9 +906,20 @@ function ensureGibushAiChatWidget() {
     var attachBtn = document.createElement("button");
     attachBtn.type = "button";
     attachBtn.id = "gibush-ai-chat-attach";
-    attachBtn.textContent = "תמונה";
+    attachBtn.className = "gaic-icon-btn";
+    attachBtn.innerHTML = gibushAiChatSvgIcon("photo");
     attachBtn.setAttribute("aria-label", "צרף צילום מסך או תמונה");
     attachBtn.title = "צרף תמונה / צילום מסך (אפשר גם להדביק עם Ctrl+V)";
+    var presetsBtn = null;
+    if (gibushAiChatDiagnosticsEnabled()) {
+        presetsBtn = document.createElement("button");
+        presetsBtn.type = "button";
+        presetsBtn.id = "gibush-ai-chat-presets";
+        presetsBtn.className = "gaic-icon-btn";
+        presetsBtn.innerHTML = gibushAiChatSvgIcon("clipboard");
+        presetsBtn.setAttribute("aria-label", "ניתוחים מוכנים");
+        presetsBtn.title = "ניתוחים מוכנים — פותח רשימת שאלות אבחון";
+    }
     var expensiveBtn = document.createElement("button");
     expensiveBtn.type = "button";
     expensiveBtn.id = "gibush-ai-chat-expensive";
@@ -886,19 +937,12 @@ function ensureGibushAiChatWidget() {
     var actionsRow = document.createElement("div");
     actionsRow.className = "gaic-actions";
     actionsRow.appendChild(attachBtn);
+    if (presetsBtn) actionsRow.appendChild(presetsBtn);
     actionsRow.appendChild(expensiveBtn);
     actionsRow.appendChild(sendBtn);
     inputRow.appendChild(textarea);
     inputRow.appendChild(actionsRow);
     inputRow.appendChild(fileInput);
-
-    var composerPresetRow = null;
-    if (gibushAiChatDiagnosticsEnabled()) {
-        composerPresetRow = document.createElement("div");
-        composerPresetRow.className = "gaic-preset-row";
-        composerPresetRow.setAttribute("data-gaic-preset-host", "composer");
-        composer.appendChild(composerPresetRow);
-    }
 
     var diagModeBar = null;
     var diagModeText = null;
@@ -932,6 +976,8 @@ function ensureGibushAiChatWidget() {
     var teamPicker = null;
     var pendingDiagnosticPreset = null;
     var selectedDiagnosticTeam = null;
+    var presetPicker = null;
+    var pendingPresetConfirm = null;
     // Team picker only for full access; live_team starts diagnostics on its fixed team.
     if (access.allowed && access.mode === "full") {
         teamPicker = document.createElement("div");
@@ -962,12 +1008,53 @@ function ensureGibushAiChatWidget() {
         }
     }
 
+    if (gibushAiChatDiagnosticsEnabled()) {
+        presetPicker = document.createElement("div");
+        presetPicker.id = "gibush-ai-chat-preset-picker";
+        presetPicker.setAttribute("dir", "rtl");
+        presetPicker.setAttribute("role", "dialog");
+        presetPicker.setAttribute("aria-modal", "true");
+        presetPicker.setAttribute("aria-labelledby", "gibush-ai-chat-preset-picker-title");
+        presetPicker.innerHTML =
+            '<div class="gaic-picker-panel">' +
+            '<div class="gaic-preset-step" data-gaic-preset-step="list">' +
+            '<h3 class="gaic-picker-title" id="gibush-ai-chat-preset-picker-title">ניתוחים מוכנים</h3>' +
+            '<p class="gaic-picker-sub">בחר שאלת אבחון להרצה על צוות</p>' +
+            '<div class="gaic-preset-list" id="gibush-ai-chat-preset-list"></div>' +
+            '<div class="gaic-picker-actions">' +
+            '<button type="button" id="gibush-ai-chat-preset-close">סגור</button>' +
+            "</div></div>" +
+            '<div class="gaic-preset-step" data-gaic-preset-step="confirm" hidden>' +
+            '<h3 class="gaic-picker-title" id="gibush-ai-chat-preset-confirm-title"></h3>' +
+            '<p class="gaic-preset-summary" id="gibush-ai-chat-preset-confirm-summary"></p>' +
+            '<p class="gaic-preset-warn" id="gibush-ai-chat-preset-confirm-warn">' +
+            "שים לב: בחירה זו תפתח הקשר שיחה נפרד (מצב אבחון) ולא תמשיך את השיחה החופשית הנוכחית. " +
+            "האם להמשיך?" +
+            "</p>" +
+            '<div class="gaic-picker-actions">' +
+            '<button type="button" id="gibush-ai-chat-preset-confirm">המשך</button>' +
+            '<button type="button" id="gibush-ai-chat-preset-back">חזרה</button>' +
+            "</div></div></div>";
+        root.appendChild(presetPicker);
+
+        var presetList = presetPicker.querySelector("#gibush-ai-chat-preset-list");
+        GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.forEach(function (preset) {
+            var item = document.createElement("button");
+            item.type = "button";
+            item.className = "gaic-preset-item";
+            item.setAttribute("data-preset", preset.id);
+            item.textContent = preset.label;
+            presetList.appendChild(item);
+        });
+    }
+
     if (!access.allowed) {
         shell.classList.add("gaic-access-denied");
         textarea.disabled = true;
         sendBtn.disabled = true;
         expensiveBtn.disabled = true;
         attachBtn.disabled = true;
+        if (presetsBtn) presetsBtn.disabled = true;
         textarea.placeholder = "אין הרשאה";
     }
 
@@ -991,6 +1078,13 @@ function ensureGibushAiChatWidget() {
     var teamConfirmBtn = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-confirm") : null;
     var teamCancelBtn = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-cancel") : null;
     var teamPickerSub = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-picker-sub") : null;
+    var presetCloseBtn = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-close") : null;
+    var presetConfirmBtn = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-confirm") : null;
+    var presetBackBtn = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-back") : null;
+    var presetConfirmTitle = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-confirm-title") : null;
+    var presetConfirmSummary = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-confirm-summary") : null;
+    var presetStepList = presetPicker ? presetPicker.querySelector('[data-gaic-preset-step="list"]') : null;
+    var presetStepConfirm = presetPicker ? presetPicker.querySelector('[data-gaic-preset-step="confirm"]') : null;
 
     function setExpensiveArmed(on) {
         expensiveArmed = !!on;
@@ -1055,13 +1149,10 @@ function ensureGibushAiChatWidget() {
             sendBtn.textContent = "שלח";
             expensiveBtn.disabled = true;
             attachBtn.disabled = true;
+            if (presetsBtn) presetsBtn.disabled = true;
             if (attachClearBtn) attachClearBtn.disabled = true;
             if (diagModeExitBtn) diagModeExitBtn.disabled = true;
             textarea.disabled = true;
-            var deniedChips = shell.querySelectorAll("button.gaic-preset-chip");
-            for (var di = 0; di < deniedChips.length; di++) {
-                deniedChips[di].disabled = true;
-            }
             return;
         }
         // While busy this becomes a Stop button. It deliberately remains
@@ -1074,13 +1165,10 @@ function ensureGibushAiChatWidget() {
         );
         expensiveBtn.disabled = requestInFlight;
         attachBtn.disabled = requestInFlight;
+        if (presetsBtn) presetsBtn.disabled = requestInFlight;
         if (attachClearBtn) attachClearBtn.disabled = requestInFlight;
         if (diagModeExitBtn) diagModeExitBtn.disabled = requestInFlight;
         textarea.disabled = requestInFlight;
-        var chips = shell.querySelectorAll("button.gaic-preset-chip");
-        for (var i = 0; i < chips.length; i++) {
-            chips[i].disabled = requestInFlight;
-        }
     }
 
     function refreshDiagModeBar() {
@@ -1137,37 +1225,56 @@ function ensureGibushAiChatWidget() {
         textarea.style.height = Math.min(textarea.scrollHeight, 160) + "px";
     }
 
-    function fillPresetHost(host) {
-        if (!host) return;
-        host.innerHTML = "";
-        var currentAccess = gibushAiChatResolveAccess();
-        GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.forEach(function (preset) {
-            var chip = document.createElement("button");
-            chip.type = "button";
-            chip.className = "gaic-preset-chip";
-            chip.textContent = preset.label;
-            chip.setAttribute("data-preset", preset.id);
-            chip.disabled = requestInFlight || !currentAccess.allowed;
-            chip.addEventListener("click", function () {
-                if (currentAccess.mode === "live_team" && currentAccess.teamNumber) {
-                    sendDiagnostic(preset, currentAccess.teamNumber);
-                    return;
-                }
-                openTeamPicker(preset);
-            });
-            host.appendChild(chip);
-        });
+    function showPresetStep(step) {
+        if (!presetStepList || !presetStepConfirm) return;
+        var showConfirm = step === "confirm";
+        presetStepList.hidden = showConfirm;
+        presetStepConfirm.hidden = !showConfirm;
+        if (presetPicker) {
+            presetPicker.setAttribute(
+                "aria-labelledby",
+                showConfirm
+                    ? "gibush-ai-chat-preset-confirm-title"
+                    : "gibush-ai-chat-preset-picker-title"
+            );
+        }
     }
 
-    function refreshPresetChips() {
-        if (!gibushAiChatDiagnosticsEnabled()) return;
-        var emptyHost = messages.querySelector('[data-gaic-preset-host="empty"]');
-        if (emptyHost) fillPresetHost(emptyHost);
-        if (composerPresetRow) {
-            var hasHistory = gibushAiChatLoadHistory().length > 0;
-            composerPresetRow.style.display = hasHistory ? "flex" : "none";
-            if (hasHistory) fillPresetHost(composerPresetRow);
+    function closePresetPicker() {
+        if (!presetPicker) return;
+        presetPicker.classList.remove("gaic-open");
+        pendingPresetConfirm = null;
+        showPresetStep("list");
+    }
+
+    function openPresetPicker() {
+        if (!presetPicker || requestInFlight) return;
+        if (!gibushAiChatResolveAccess().allowed) return;
+        pendingPresetConfirm = null;
+        showPresetStep("list");
+        presetPicker.classList.add("gaic-open");
+    }
+
+    function openPresetConfirm(preset) {
+        if (!presetPicker || !preset) return;
+        pendingPresetConfirm = preset;
+        if (presetConfirmTitle) presetConfirmTitle.textContent = preset.label || "";
+        if (presetConfirmSummary) {
+            presetConfirmSummary.textContent = preset.summary || preset.label || "";
         }
+        showPresetStep("confirm");
+    }
+
+    function confirmPendingPreset() {
+        var preset = pendingPresetConfirm;
+        if (!preset) return;
+        var currentAccess = gibushAiChatResolveAccess();
+        closePresetPicker();
+        if (currentAccess.mode === "live_team" && currentAccess.teamNumber) {
+            sendDiagnostic(preset, currentAccess.teamNumber);
+            return;
+        }
+        openTeamPicker(preset);
     }
 
     function closeTeamPicker() {
@@ -1191,8 +1298,8 @@ function ensureGibushAiChatWidget() {
         }
         if (teamConfirmBtn) teamConfirmBtn.disabled = true;
         var selected = teamPicker.querySelectorAll("button.gaic-team-btn.gaic-selected");
-        for (var i = 0; i < selected.length; i++) {
-            selected[i].classList.remove("gaic-selected");
+        for (var si = 0; si < selected.length; si++) {
+            selected[si].classList.remove("gaic-selected");
         }
         teamPicker.classList.add("gaic-open");
     }
@@ -1394,7 +1501,6 @@ function ensureGibushAiChatWidget() {
         history.push(assistantMessage);
         gibushAiChatSaveHistory(history);
         gibushAiChatRenderMessage(messages, assistantMessage);
-        refreshPresetChips();
     }
 
     function handleAskFailure(errorText, ctx) {
@@ -1413,7 +1519,6 @@ function ensureGibushAiChatWidget() {
                 refreshDiagModeBar();
             }
         }
-        refreshPresetChips();
     }
 
     function askErrorText(data, status) {
@@ -1872,7 +1977,6 @@ function ensureGibushAiChatWidget() {
         history.push(userMessage);
         gibushAiChatSaveHistory(history);
         gibushAiChatRenderMessage(messages, userMessage);
-        refreshPresetChips();
         textarea.value = "";
         autosizeTextarea();
         clearPendingAttachment();
@@ -1959,7 +2063,6 @@ function ensureGibushAiChatWidget() {
         gibushAiChatRenderMessage(messages, userMessage);
         gibushAiChatEnterDiagnosticMode(teamNumber, preset, diagnosticResponseId);
         refreshDiagModeBar();
-        refreshPresetChips();
         messages.scrollTop = messages.scrollHeight;
 
         var scope = gibushAiChatScopePayload();
@@ -1996,7 +2099,6 @@ function ensureGibushAiChatWidget() {
     } else {
         gibushAiChatRenderEmpty(messages);
     }
-    refreshPresetChips();
     refreshDiagModeBar();
     messages.scrollTop = messages.scrollHeight;
 
@@ -2006,7 +2108,6 @@ function ensureGibushAiChatWidget() {
         gibushAiChatNewConversation(messages);
         setExpensiveArmed(false);
         clearPendingAttachment();
-        refreshPresetChips();
         refreshDiagModeBar();
         textarea.focus();
     });
@@ -2024,6 +2125,12 @@ function ensureGibushAiChatWidget() {
         if (requestInFlight) return;
         fileInput.click();
     });
+    if (presetsBtn) {
+        presetsBtn.addEventListener("click", function () {
+            if (requestInFlight) return;
+            openPresetPicker();
+        });
+    }
     if (attachClearBtn) {
         attachClearBtn.addEventListener("click", function () {
             if (requestInFlight) return;
@@ -2051,6 +2158,39 @@ function ensureGibushAiChatWidget() {
         }
     });
     textarea.addEventListener("input", autosizeTextarea);
+
+    if (presetPicker) {
+        presetPicker.addEventListener("click", function (e) {
+            if (e.target === presetPicker) {
+                closePresetPicker();
+            }
+        });
+        presetPicker.querySelector("#gibush-ai-chat-preset-list").addEventListener("click", function (e) {
+            var item = e.target.closest("button.gaic-preset-item");
+            if (!item) return;
+            var presetId = item.getAttribute("data-preset");
+            var preset = null;
+            for (var pi = 0; pi < GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.length; pi++) {
+                if (GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS[pi].id === presetId) {
+                    preset = GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS[pi];
+                    break;
+                }
+            }
+            if (preset) openPresetConfirm(preset);
+        });
+        if (presetCloseBtn) {
+            presetCloseBtn.addEventListener("click", closePresetPicker);
+        }
+        if (presetBackBtn) {
+            presetBackBtn.addEventListener("click", function () {
+                pendingPresetConfirm = null;
+                showPresetStep("list");
+            });
+        }
+        if (presetConfirmBtn) {
+            presetConfirmBtn.addEventListener("click", confirmPendingPreset);
+        }
+    }
 
     if (teamPicker) {
         teamPicker.addEventListener("click", function (e) {

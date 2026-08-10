@@ -315,25 +315,39 @@ article:has(#gibush-ai-chat-root),
     align-items: center;
     justify-content: flex-start;
 }
-#gibush-ai-chat-shell button#gibush-ai-chat-attach {
+#gibush-ai-chat-shell button.gaic-icon-btn,
+#gibush-ai-chat-shell button#gibush-ai-chat-attach,
+#gibush-ai-chat-shell button#gibush-ai-chat-presets {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
     border: 1px solid var(--gaic-border);
     background: #fff;
     color: #5c5c5c;
     border-radius: 10px;
-    min-width: 52px;
+    width: 40px;
+    min-width: 40px;
     height: 40px;
-    padding: 0 8px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: 0;
     cursor: pointer;
     line-height: 1;
     flex-shrink: 0;
 }
-#gibush-ai-chat-shell button#gibush-ai-chat-attach:hover {
+#gibush-ai-chat-shell button.gaic-icon-btn svg,
+#gibush-ai-chat-shell button#gibush-ai-chat-attach svg,
+#gibush-ai-chat-shell button#gibush-ai-chat-presets svg {
+    display: block;
+    pointer-events: none;
+}
+#gibush-ai-chat-shell button.gaic-icon-btn:hover,
+#gibush-ai-chat-shell button#gibush-ai-chat-attach:hover,
+#gibush-ai-chat-shell button#gibush-ai-chat-presets:hover {
     background: #f9fafb;
 }
-#gibush-ai-chat-shell button#gibush-ai-chat-attach:disabled {
+#gibush-ai-chat-shell button.gaic-icon-btn:disabled,
+#gibush-ai-chat-shell button#gibush-ai-chat-attach:disabled,
+#gibush-ai-chat-shell button#gibush-ai-chat-presets:disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
@@ -404,34 +418,6 @@ article:has(#gibush-ai-chat-root),
     content: "$ ";
     opacity: 0.75;
     font-weight: 700;
-}
-
-#gibush-ai-chat-shell .gaic-preset-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 0 4px 12px;
-}
-#gibush-ai-chat-shell .gaic-preset-row.gaic-preset-empty {
-    justify-content: center;
-    padding: 20px 8px 0;
-}
-#gibush-ai-chat-shell button.gaic-preset-chip {
-    border: 1px solid var(--gaic-border);
-    background: #fff;
-    color: #333;
-    border-radius: 999px;
-    padding: 7px 12px;
-    font-size: 13px;
-    cursor: pointer;
-    line-height: 1.3;
-}
-#gibush-ai-chat-shell button.gaic-preset-chip:hover {
-    background: #f0f0f0;
-}
-#gibush-ai-chat-shell button.gaic-preset-chip:disabled {
-    opacity: 0.55;
-    cursor: wait;
 }
 
 #gibush-ai-chat-shell .gaic-diag-mode {
@@ -547,6 +533,98 @@ article:has(#gibush-ai-chat-root),
 #gibush-ai-chat-team-picker button#gibush-ai-chat-team-confirm:disabled {
     opacity: 0.45;
     cursor: not-allowed;
+}
+
+#gibush-ai-chat-preset-picker {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 15, 15, 0.35);
+    padding: 16px;
+}
+#gibush-ai-chat-preset-picker.gaic-open {
+    display: flex;
+}
+#gibush-ai-chat-preset-picker .gaic-picker-panel {
+    width: min(420px, 100%);
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid var(--gaic-border);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+    padding: 18px 18px 14px;
+    text-align: right;
+}
+#gibush-ai-chat-preset-picker .gaic-picker-title {
+    margin: 0 0 6px;
+    font-size: 16px;
+    font-weight: 700;
+}
+#gibush-ai-chat-preset-picker .gaic-picker-sub {
+    margin: 0 0 14px;
+    font-size: 13px;
+    color: var(--gaic-muted);
+}
+#gibush-ai-chat-preset-picker .gaic-preset-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+    max-height: min(52vh, 360px);
+    overflow-y: auto;
+}
+#gibush-ai-chat-preset-picker button.gaic-preset-item {
+    display: block;
+    width: 100%;
+    text-align: right;
+    border: 1px solid var(--gaic-border);
+    background: #fff;
+    color: #333;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.35;
+}
+#gibush-ai-chat-preset-picker button.gaic-preset-item:hover {
+    background: #f5f5f5;
+}
+#gibush-ai-chat-preset-picker .gaic-preset-summary {
+    margin: 0 0 12px;
+    font-size: 14px;
+    color: var(--gaic-text);
+    line-height: 1.5;
+}
+#gibush-ai-chat-preset-picker .gaic-preset-warn {
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border: 1px solid #e8d9a8;
+    background: #fff8e8;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #5c4a1a;
+    line-height: 1.45;
+}
+#gibush-ai-chat-preset-picker .gaic-picker-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+}
+#gibush-ai-chat-preset-picker .gaic-picker-actions button {
+    border: 1px solid var(--gaic-border);
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+}
+#gibush-ai-chat-preset-picker button#gibush-ai-chat-preset-confirm {
+    background: #2d3748;
+    border-color: #2d3748;
+    color: #fff;
 }
 
 @media (max-width: 720px) {
