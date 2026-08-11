@@ -16,7 +16,7 @@ var engToHebTranslations = {
     "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
 }
 
-TB.render("component_24", async function (data) {
+TB.render("component_25", async function (data) {
     window.trun = function() { return false; };
     const existing = initialElementFixGrades.nextSibling;
     if (existing) existing.remove();
@@ -27,53 +27,43 @@ TB.render("component_24", async function (data) {
     }
     
     showLoading();
-    listenToAssesseeChanges();
-    selectTeam();
-    
+    processAssesseeTableData(data);
+
     await loadExistingActivities();
     
     hideLoading();
 });
 
-function listenToAssesseeChanges(){
-    console.log("listening to assessee changes");
-    $("#field_block_field_1482").change(() => {
-        console.log("team changed");
-        const container = document.querySelector("#field_block_field_1483");
-        const observer = new MutationObserver(() => {
-            const options = container.querySelectorAll('option');
-            Array.from(options).forEach(opt => {
-                const text = opt.textContent.trim();
-                const value = opt.value.trim();
-                if (/^\d+$/.test(text) && value !== "") {
-                    numberToIdMapFixGrades[Number(text)] = value;
-                }
-            });
-            console.log("numberToIdMapFixGrades:", numberToIdMapFixGrades);
-            assesseeNumbersFixGrades = Object.keys(numberToIdMapFixGrades);
-            console.log("assessee numbers loaded: " + JSON.stringify(assesseeNumbersFixGrades));
-  
-            observer.disconnect(); // stop observing after the first update
-        });
-        observer.observe(container, { childList: true, subtree: true });
-    });
-}
+function processAssesseeTableData(payload) {
+    const rows = payload?.records || [];
 
-function selectTeam(){
-    setTimeout(() => {
-        $('#field_block_field_1482 select.select2').each(function () {
-            const $select = $(this);
-            const $options = $select.find('option').filter(function () {
-                return $(this).val(); // Excludes empty value options
-            });
-    
-            if ($options.length === 1) {
-                currentTeamIDFixGrades = $options.first().val();
-                $select.val(currentTeamIDFixGrades).trigger('change'); // select and trigger change event
+    numberToIdMapFixGrades = {};
+    currentTeamIDFixGrades = null;
+
+    rows.forEach(row => {
+        const number = row.field_61;
+        const id = row.id;
+        if (number !== undefined && number !== null && id) {
+            numberToIdMapFixGrades[Number(number)] = id;
+        }
+
+        if (!currentTeamIDFixGrades && row.field_243 && typeof row.field_243 === "object") {
+            const teamIds = Object.keys(row.field_243);
+            if (teamIds.length > 0) {
+                currentTeamIDFixGrades = teamIds[0];
             }
-            console.log("selected team, currentTeamIDFixGrades:", currentTeamIDFixGrades);
-        });
-    }, 100);
+        }
+    });
+
+    assesseeNumbersFixGrades = Object.keys(numberToIdMapFixGrades);
+
+    console.log("numberToIdMapFixGrades:", numberToIdMapFixGrades);
+    console.log("assessee numbers:", JSON.stringify(assesseeNumbersFixGrades));
+    console.log("currentTeamIDFixGrades:", currentTeamIDFixGrades);
+
+    if (rows.length > 0 && !currentTeamIDFixGrades) {
+        console.warn("Assessee rows loaded but no team ID found in field_243 — check field config.");
+    }
 }
 
 // Utility function to show/hide loader
