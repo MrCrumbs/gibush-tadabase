@@ -2,6 +2,11 @@ var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var initialElementGraphs = document.querySelector("article div[ui-view]");
 var currentTeamNumberGraphs = "{loggedInUser.צוות שטח}";
 
+if (!currentTeamNumberGraphs) {
+    alert("למשתמש המחובר לא מוגדר צוות שטח.");
+    return;
+}
+
 TB.render("component_23", async function (data) {
     $("div[af-data-table]").remove();
     

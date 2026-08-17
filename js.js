@@ -15,6 +15,11 @@ var engToHeb = {
     "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
 }
 
+if (!currentTeamNumber) {
+    alert("למשתמש המחובר לא מוגדר צוות שטח.");
+    return;
+}
+
 TB.render("component_26", async function (data) {
     if(!initialSetup()){
         return;
