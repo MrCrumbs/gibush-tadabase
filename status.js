@@ -208,31 +208,51 @@ TB.render('component_13', function(data) {
             }).first();
         }
 
+        function findCountsTable($weightTable) {
+            return $('.madad-table').filter(function() {
+                return (!$weightTable.length || this !== $weightTable[0])
+                    && columnIndexByHeader($(this), "מכפיל") < 0;
+            }).first();
+        }
+
+        function dataRows($table) {
+            return $table.find('tbody tr').filter(function() {
+                var $row = $(this);
+                return !$row.hasClass("table-row-summery") && $row.find("td").length > 0;
+            });
+        }
+
         function applyMadadAlerts() {
             var $weightTable = findWeightTable();
-            if (!$weightTable.length) {
+            var $countsTable = findCountsTable($weightTable);
+            if (!$weightTable.length || !$countsTable.length) {
                 return;
             }
             var statusColumnIndex = columnIndexByHeader($weightTable, "סטאטוס");
             var sayeretColumnIndex = columnIndexByHeader($weightTable, "יעד סיירת");
             var egozColumnIndex = columnIndexByHeader($weightTable, "יעד אגוז");
             var weightColumnIndex = columnIndexByHeader($weightTable, "מכפיל");
+            var $weightRows = dataRows($weightTable);
+            var $countRows = dataRows($countsTable);
 
-            $weightTable.find('tbody tr').each(function() {
-                var currentRow = $(this);
-                if (currentRow.hasClass("table-row-summery") || currentRow.find("td").length === 0) {
+            $weightRows.css("background-color", "");
+            $countRows.each(function(rowIndex) {
+                var $countRow = $(this);
+                var $weightRow = $weightRows.eq(rowIndex);
+                if (!$weightRow.length) {
+                    $countRow.css("background-color", "");
                     return;
                 }
-                var status = parseCellFloat(currentRow.find('td').eq(statusColumnIndex));
-                var sayeret = parseCellFloat(currentRow.find('td').eq(sayeretColumnIndex));
-                var egoz = parseCellFloat(currentRow.find('td').eq(egozColumnIndex));
+                var status = parseCellFloat($weightRow.find('td').eq(statusColumnIndex));
+                var sayeret = parseCellFloat($weightRow.find('td').eq(sayeretColumnIndex));
+                var egoz = parseCellFloat($weightRow.find('td').eq(egozColumnIndex));
                 var target = (Number.isFinite(sayeret) ? sayeret : 0) + (Number.isFinite(egoz) ? egoz : 0);
-                var weight = parseCellFloat(currentRow.find('td').eq(weightColumnIndex));
+                var weight = parseCellFloat($weightRow.find('td').eq(weightColumnIndex));
                 var currentRatio = (Number.isFinite(status) && target > 0) ? (status / target) : NaN;
                 if (Number.isFinite(currentRatio) && Number.isFinite(weight) && currentRatio < weight) {
-                    currentRow.css("background-color", "#FF6464");
+                    $countRow.css("background-color", "#FF6464");
                 } else {
-                    currentRow.css("background-color", "");
+                    $countRow.css("background-color", "");
                 }
             });
         }
