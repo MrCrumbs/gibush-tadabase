@@ -1,0 +1,42 @@
+.merged-cell-bottom {
+    border-bottom: none !important;
+}
+.merged-cell-top {
+    border-top: none !important;
+}
+.merged-background {
+    background-color: white !important;
+}
+.merged-hidden {
+    visibility: hidden;
+}
+.merged-visible {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.tb-menu-link{
+    direction: rtl;
+}
+
+
+.rtl-content {
+    direction: rtl;
+}
+.vertical-middle {
+    vertical-align: middle !important;
+}
+.row-light {
+    background-color: white;
+}
+.row-dark {
+    background-color: #F0F0F0;
+}
+.alert-row {
+    background-color: #FF6464;
+}
+.table-hover-disabled tbody tr:hover {
+    background-color: inherit !important;
+}
