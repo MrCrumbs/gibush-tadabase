@@ -17,9 +17,7 @@ var engToHeb = {
 
 if (!currentTeamNumber) {
     alert("למשתמש המחובר לא מוגדר צוות שטח.");
-    return;
-}
-
+} else {
 TB.render("component_26", async function (data) {
     if(!initialSetup()){
         return;
@@ -61,6 +59,7 @@ TB.render("component_26", async function (data) {
             break;
     }
 });
+}
 
 async function syncActivityNumbers() {
     const localState = JSON.parse(localStorage.getItem("gameState") || "{}");

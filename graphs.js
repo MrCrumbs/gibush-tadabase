@@ -4,9 +4,7 @@ var currentTeamNumberGraphs = "{loggedInUser.צוות שטח}";
 
 if (!currentTeamNumberGraphs) {
     alert("למשתמש המחובר לא מוגדר צוות שטח.");
-    return;
-}
-
+} else {
 TB.render("component_23", async function (data) {
     $("div[af-data-table]").remove();
     
@@ -41,6 +39,7 @@ TB.render("component_23", async function (data) {
         console.error("Fetch error:", error);
     });
 });
+}
 
 // Utility function to show/hide loader
 function showLoading() {
