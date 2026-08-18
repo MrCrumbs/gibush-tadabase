@@ -83,6 +83,18 @@ function showActivityStatus(data) {
         return Math.max.apply(null, numericValues);
     }
 
+    function numericSortValue(value) {
+        if (value === '-' || value === '' || value === null || value === undefined) {
+            return 0;
+        }
+        var n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    function numericCompare(a, b) {
+        return numericSortValue(a) - numericSortValue(b);
+    }
+
     // Transform input data into flat rows per team, skipping empty teams
     const tableData = [];
     Object.entries(data).forEach(function(entry) {
@@ -102,7 +114,9 @@ function showActivityStatus(data) {
         {
             id: 'team',
             name: 'צוות',
-            sort: true,
+            sort: {
+                compare: numericCompare
+            },
             width: '100px'
         }
     ].concat(
@@ -110,7 +124,9 @@ function showActivityStatus(data) {
             return {
                 id: key,
                 name: engToHebTranslations[key] || key,
-                sort: true,
+                sort: {
+                    compare: numericCompare
+                },
                 width: '120px'
             };
         })

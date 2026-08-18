@@ -421,6 +421,41 @@ function isSacksLocalRestoreUsable(sacksData) {
     return false;
 }
 
+function sacksDraftStorageKey(activityNumber) {
+    return `sacksData_${activityNumber}`;
+}
+
+function readSacksDraft(activityNumber) {
+    const heatKey = sacksDraftStorageKey(activityNumber);
+    const keyedRaw = localStorage.getItem(heatKey);
+    if (keyedRaw) {
+        try {
+            const keyed = JSON.parse(keyedRaw);
+            if (keyed && typeof keyed === "object") return keyed;
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    const legacyRaw = localStorage.getItem("sacksData");
+    localStorage.removeItem("sacksData");
+    if (!legacyRaw) return {};
+    const doneHeats = (JSON.parse(localStorage.getItem("gameState") || "{}").sacks || []).map(String);
+    // Unkeyed leftover is the previous heat. Only reuse it for an unsubmitted heat 1.
+    if (String(activityNumber) === "1" && !doneHeats.includes("1")) {
+        try {
+            return JSON.parse(legacyRaw) || {};
+        } catch (e) {
+            console.error(e);
+        }
+    }
+    return {};
+}
+
+function clearSacksDraft(activityNumber) {
+    localStorage.removeItem(sacksDraftStorageKey(activityNumber));
+    localStorage.removeItem("sacksData");
+}
+
 async function fetchHolesSubmittedDataFromServer(heatNumber) {
     const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
         method: "POST",
@@ -506,7 +541,10 @@ async function resubmitActivity(currentTeamNumberArg, currentTeamIDArg, activity
 }
 
 async function holes(){
-    const gameState = JSON.parse(localStorage.getItem("gameState") || "{}");
+    showLoading();
+    await syncActivityNumbers();
+    hideLoading();
+    const gameState = activityNumberMap || JSON.parse(localStorage.getItem("gameState") || "{}");
     const holesActivities = gameState["holes"] || [];
     let holesResubmitHeat = null;
 
@@ -866,8 +904,9 @@ async function sacks(activityNumber){
     historySection.appendChild(historyList);
     sacksContainer.appendChild(historySection);
     
-    // Load existing data from localStorage
-    const sacksData = JSON.parse(localStorage.getItem("sacksData") || "{}");
+    // Load a draft for THIS heat only. Never reuse heat 1 laps on heat 2.
+    const sacksData = readSacksDraft(activityNumber);
+    let sacksSubmitLocked = false;
 
     let pressIndicatorEl = null;
     let pressIndicatorTimeout = null;
@@ -1055,7 +1094,7 @@ async function sacks(activityNumber){
     // Reset button event
     resetButton.addEventListener("click", () => {
         if (confirm("האם אתה בטוח שברצונך לאפס את כל הנתונים?")) {
-            localStorage.removeItem("sacksData");
+            clearSacksDraft(activityNumber);
             document.querySelectorAll(".lap-counter").forEach(counter => {
                 counter.textContent = "0";
             });
@@ -1103,8 +1142,13 @@ async function sacks(activityNumber){
             // Show success toast
             showSuccessToast("הטופס נשלח בהצלחה! חוזר לתפריט...");
             
-            // Clear localStorage after successful submission
-            localStorage.removeItem("sacksData");
+            sacksSubmitLocked = true;
+            clearSacksDraft(activityNumber);
+            document.querySelectorAll(".lap-counter").forEach(counter => {
+                counter.textContent = "0";
+            });
+            actionStack.length = 0;
+            updateUndoButtonState();
             hidePressIndicator();
             clearHistoryEntries();
             
@@ -1136,13 +1180,15 @@ async function sacks(activityNumber){
     
     // Helper function to save data to localStorage
     function saveSacksData() {
+        if (sacksSubmitLocked) return;
         const data = {};
         document.querySelectorAll(".assessee-card").forEach(card => {
             const number = card.dataset.number;
             const count = parseInt(card.querySelector(".lap-counter").textContent);
             data[number] = count;
         });
-        localStorage.setItem("sacksData", JSON.stringify(data));
+        localStorage.setItem(sacksDraftStorageKey(activityNumber), JSON.stringify(data));
+        localStorage.removeItem("sacksData");
     }
     
     // Helper function to build result string
@@ -2280,10 +2326,11 @@ function sociometricStretcher(activityNumber){
 
 function updateActivityNumber(activityName, activityNumber){
     console.log ("updating activity number in map and local storage with new activity number: ", activityNumber);
-    if (!activityNumberMap[activityName]) {
-        activityNumberMap[activityName] = [activityNumber.toString()];
-    } else {
-        activityNumberMap[activityName].push(activityNumber.toString());
+    const heat = activityNumber.toString();
+    const existing = activityNumberMap[activityName] || [];
+    const alreadyRecorded = existing.some((item) => String(item) === heat);
+    if (!alreadyRecorded) {
+        activityNumberMap[activityName] = existing.concat(heat);
     }
     localStorage.setItem("gameState", JSON.stringify(activityNumberMap));
 }

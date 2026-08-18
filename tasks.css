@@ -1,0 +1,294 @@
+/* Task menu — same layout as activities (#game-menu) */
+#tasks-menu {
+    display: grid;
+    gap: 20px;
+    margin: 24px auto 16px;
+    max-width: 960px;
+    padding: 20px;
+    direction: rtl;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+#tasks-menu.hidden {
+    display: none !important;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (max-width: 600px) {
+    #tasks-menu {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.task-menu-button {
+    text-align: center !important;
+    background: #ffffff;
+    color: #0f172a;
+    font-size: 1.05rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px 12px;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(2, 6, 23, 0.08);
+    width: 100%;
+}
+
+.task-menu-button * {
+    text-align: center !important;
+}
+
+.task-menu-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 10px 22px rgba(2, 6, 23, 0.12);
+    border-color: #cbd5e1;
+}
+
+.task-menu-button.active {
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.15), 0 10px 22px rgba(2, 6, 23, 0.12);
+}
+
+.task-menu-icon {
+    font-size: 2.2rem;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+.task-menu-icon i {
+    font-size: 2rem;
+}
+
+/* Emoji icon for task buttons */
+.task-emoji {
+    font-size: 2.2rem;
+    margin-bottom: 8px;
+    line-height: 1;
+}
+
+/* (Previously we used FontAwesome icons; now we show emojis.) */
+
+.task-menu-title {
+    font-weight: bold;
+    line-height: 1.25;
+}
+
+/* Guide panel */
+.task-guide-panel {
+    direction: rtl;
+    max-width: 960px;
+    margin: 0 auto 24px;
+    padding: 0 20px;
+}
+
+.task-guide-panel.hidden,
+.task-table-panel.hidden {
+    display: none !important;
+}
+
+.task-guide-back-btn {
+    margin: 0 0 12px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: #2a5f94;
+    color: white;
+    font-weight: 700;
+}
+
+.task-guide-back-btn:hover {
+    background: #245981;
+}
+
+.task-guide-card {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.task-guide-card h2 {
+    margin: 0 0 12px;
+    font-size: 1.5rem;
+    color: #1a365d;
+}
+
+.task-guide-text-block {
+    white-space: pre-wrap;
+    line-height: 1.55;
+    margin-top: 10px;
+}
+
+.task-guide-section-title {
+    margin: 18px 0 8px;
+    font-size: 1.05rem;
+    color: #2c5282;
+    border-bottom: 2px solid #e8f0fe;
+    padding-bottom: 4px;
+}
+
+.task-guide-bullets {
+    margin: 8px 0 0;
+    padding-right: 1.25rem;
+    line-height: 1.55;
+}
+
+.task-guide-info-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.task-guide-info-label {
+    font-weight: 800;
+}
+
+.task-guide-info-value {
+    flex: 1 1 auto;
+}
+
+.task-guide-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.task-guide-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    background: #e8f0fe;
+    color: #1a365d;
+}
+
+.task-guide-badge--intensity-0 {
+    background: #e6f4ea;
+    color: #1e5631;
+}
+
+.task-guide-badge--intensity-1 {
+    background: #fce8e6;
+    color: #8b2e1f;
+}
+
+.task-guide-section {
+    margin-top: 16px;
+}
+
+.task-guide-section h3 {
+    margin: 0 0 8px;
+    font-size: 1.05rem;
+    color: #2c5282;
+    border-bottom: 2px solid #e8f0fe;
+    padding-bottom: 4px;
+}
+
+.task-guide-section p {
+    margin: 0 0 8px;
+    line-height: 1.55;
+}
+
+.task-guide-section ul,
+.task-guide-section ol {
+    margin: 0;
+    padding-right: 1.25rem;
+    line-height: 1.55;
+}
+
+.task-guide-section li {
+    margin-bottom: 6px;
+}
+
+.task-guide-note {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #fff8e6;
+    border-radius: 8px;
+    border-right: 4px solid #f0ad4e;
+    font-size: 0.95rem;
+}
+
+.task-table-panel {
+    margin-top: 8px;
+}
+
+/* Comments column styling */
+.comments-column-header {
+    text-align: center !important;
+}
+
+.comments-column-cell {
+    text-align: center !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Record button styling */
+.record-button {
+    background: linear-gradient(135deg, #ff4757, #ff3742);
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    box-shadow: 0 2px 4px rgba(255, 71, 87, 0.3);
+}
+
+.record-button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(255, 71, 87, 0.4);
+    background: linear-gradient(135deg, #ff3742, #ff2f3a);
+}
+
+.record-button:active {
+    transform: scale(0.95);
+}
+
+.record-button i {
+    font-size: 14px;
+}
+
+.record-button.recording {
+    background: linear-gradient(135deg, #ff2f3a, #ff1a1a) !important;
+    box-shadow: 0 4px 12px rgba(255, 47, 58, 0.4) !important;
+}
+
+.record-button.processing {
+    background: linear-gradient(135deg, #ffa726, #ff9800) !important;
+    box-shadow: 0 4px 12px rgba(255, 167, 38, 0.4) !important;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+.record-button.processing i {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#layout_horizontal .tb-layout .tb-header .tb-header-nav .tb-menus .tb-dropdown .tb-dropbtn:has(.user-name) {
+    max-width: none !important;
+}

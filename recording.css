@@ -1,3 +1,7 @@
+.withdrawal-reason-column-hidden {
+    display: none !important;
+}
+
 /* Comments column styling */
 .comments-column-header {
     text-align: center !important;

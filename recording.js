@@ -188,6 +188,75 @@ async function updateAssesseeRecord(assesseeId, assesseeNumber, value) {
     }
 }
 
+const STATUS_COLUMN_HEADER = 'סטאטוס';
+const WITHDRAWAL_REASON_COLUMN_HEADER = 'סיבת פרישה';
+const DOCTOR_WITHDRAWAL_STATUS_MARKER = 'הופרש על ידי רופא';
+const WITHDRAWAL_REASON_COLUMN_HIDDEN_CLASS = 'withdrawal-reason-column-hidden';
+
+function normalizeHeaderText(text) {
+    return (text || '').trim().replace(/\s+/g, ' ');
+}
+
+function findColumnIndexByHeader(table, headerTitle) {
+    const headerRow = table.querySelector('thead tr');
+    if (!headerRow) return -1;
+
+    const normalizedTarget = normalizeHeaderText(headerTitle);
+    for (let i = 0; i < headerRow.children.length; i++) {
+        const headerText = normalizeHeaderText(headerRow.children[i].textContent);
+        if (headerText === normalizedTarget || headerText.includes(normalizedTarget)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+function getCellPlainText(cell) {
+    if (!cell) return '';
+    return (cell.textContent || '').trim();
+}
+
+function tableHasDoctorWithdrawalStatus(table) {
+    const statusColumnIndex = findColumnIndexByHeader(table, STATUS_COLUMN_HEADER);
+    if (statusColumnIndex === -1) return false;
+
+    const rows = table.querySelectorAll('tbody tr');
+    for (const row of rows) {
+        const statusCell = row.children[statusColumnIndex];
+        if (getCellPlainText(statusCell).includes(DOCTOR_WITHDRAWAL_STATUS_MARKER)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function setColumnVisibility(table, columnIndex, visible) {
+    const headerRow = table.querySelector('thead tr');
+    if (!headerRow || columnIndex < 0) return;
+
+    const headerCell = headerRow.children[columnIndex];
+    if (headerCell) {
+        headerCell.classList.toggle(WITHDRAWAL_REASON_COLUMN_HIDDEN_CLASS, !visible);
+    }
+
+    table.querySelectorAll('tbody tr').forEach(row => {
+        const dataCell = row.children[columnIndex];
+        if (dataCell) {
+            dataCell.classList.toggle(WITHDRAWAL_REASON_COLUMN_HIDDEN_CLASS, !visible);
+        }
+    });
+}
+
+function updateWithdrawalReasonColumnVisibility(table) {
+    if (!table) return;
+
+    const withdrawalReasonColumnIndex = findColumnIndexByHeader(table, WITHDRAWAL_REASON_COLUMN_HEADER);
+    if (withdrawalReasonColumnIndex === -1) return;
+
+    const shouldShowWithdrawalReason = tableHasDoctorWithdrawalStatus(table);
+    setColumnVisibility(table, withdrawalReasonColumnIndex, shouldShowWithdrawalReason);
+}
+
 function addCommentsColumn() {
     // Find the table
     const table = document.querySelector('table');
@@ -204,12 +273,11 @@ function addCommentsColumn() {
                 newHeaderCell.textContent = 'הערות';
                 newHeaderCell.className = 'comments-column-header';
                 
-                // Insert as third column (index 2)
-                const thirdCell = headerRow.children[2];
-                if (thirdCell) {
-                    headerRow.insertBefore(newHeaderCell, thirdCell);
+                // Insert between assessee number (0) and comments (1)
+                const commentsHeader = headerRow.children[1];
+                if (commentsHeader) {
+                    headerRow.insertBefore(newHeaderCell, commentsHeader);
                 } else {
-                    // If there's no third column, append to the end
                     headerRow.appendChild(newHeaderCell);
                 }
             }
@@ -298,16 +366,17 @@ function addCommentsColumn() {
             
             newDataCell.appendChild(recordButton);
             
-            // Insert as third column (index 2) in the row
-            const thirdCell = row.children[2];
-            if (thirdCell) {
-                row.insertBefore(newDataCell, thirdCell);
+            // Insert between assessee number (0) and comments (1)
+            const commentsCell = row.children[1];
+            if (commentsCell) {
+                row.insertBefore(newDataCell, commentsCell);
             } else {
-                // If there's no third column, append to the end
                 row.appendChild(newDataCell);
             }
         });
     }
+
+    updateWithdrawalReasonColumnVisibility(table);
 }
 
 // Global variables to track recording state
