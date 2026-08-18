@@ -11,11 +11,31 @@ TB.render('component_3', function(data) {
         $(".t-filter-button-text").text(" הוסף מסננים");
         $(".input-group input").attr("placeholder", "חיפוש");
         $(".t-export-button").text("ייצוא");
-        
+
         // Add comments column to the table
         addCommentsColumn();
         trun();
-        
+        // מעביר את כל קבוצת הפילטרים לצד ימין
+const filterTabs = document.querySelector('.filter-tabs');
+
+if (filterTabs) {
+
+    let filterWrapper =
+        document.querySelector('.tb-filter-tabs-right');
+
+    if (!filterWrapper) {
+
+        filterWrapper = document.createElement('div');
+        filterWrapper.className = 'tb-filter-tabs-right';
+
+        filterTabs.parentNode.insertBefore(
+            filterWrapper,
+            filterTabs
+        );
+
+        filterWrapper.appendChild(filterTabs);
+    }
+}
         // Get the table-actions div (the parent container of the whole bar)
         const tableActions = document.querySelector('.table-actions.no-print');
         
@@ -25,7 +45,7 @@ TB.render('component_3', function(data) {
             if (!recordsLabel) {
                 recordsLabel = document.createElement('span');
                 recordsLabel.className = 'badge badge-secondary records-count-label';
-                recordsLabel.style.cssText = 'direction: rtl; vertical-align: middle; font-size: 13px; padding: 5px 10px; float: left; margin-top: 5px;';
+              recordsLabel.style.cssText = 'direction: rtl; vertical-align: middle; font-size: 13px; padding: 5px 10px; float: left; margin-top: 5px;';
                 tableActions.insertBefore(recordsLabel, tableActions.firstChild);
             }
             recordsLabel.textContent = `${data.records.length} מוערכים`;
