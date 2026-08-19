@@ -75,6 +75,47 @@ article:has(#gibush-ai-chat-root),
     font-size: 12px;
     color: var(--gaic-muted);
 }
+/* Team context bar — shows below the heading */
+#gibush-ai-chat-shell .gaic-team-ctx {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 3px;
+}
+#gibush-ai-chat-shell .gaic-team-ctx-prefix {
+    font-size: 12px;
+    color: var(--gaic-muted);
+}
+#gibush-ai-chat-shell .gaic-team-chip-label {
+    font-size: 12px;
+    color: var(--gaic-muted);
+}
+#gibush-ai-chat-shell .gaic-team-chip {
+    font-size: 12px;
+    padding: 2px 9px;
+    border: 1px solid var(--gaic-border);
+    border-radius: 999px;
+    background: #fff;
+    color: #444;
+    cursor: pointer;
+    line-height: 1.6;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+#gibush-ai-chat-shell .gaic-team-chip:hover {
+    background: #f0f0f0;
+}
+#gibush-ai-chat-shell .gaic-team-chip.gaic-selected {
+    background: #2d3748;
+    border-color: #2d3748;
+    color: #fff;
+}
+/* Step label inside assessee picker for team-selection sub-step */
+#gibush-ai-chat-assessee-picker .gaic-picker-step-label {
+    font-size: 13px;
+    color: var(--gaic-muted);
+    margin: 0 0 6px;
+}
 #gibush-ai-chat-shell .gaic-scope-deny {
     margin-top: 4px;
     font-size: 13px;
@@ -466,7 +507,8 @@ article:has(#gibush-ai-chat-root),
     cursor: wait;
 }
 
-#gibush-ai-chat-team-picker {
+#gibush-ai-chat-team-picker,
+#gibush-ai-chat-assessee-picker {
     position: fixed;
     inset: 0;
     z-index: 40;
@@ -476,10 +518,12 @@ article:has(#gibush-ai-chat-root),
     background: rgba(15, 15, 15, 0.35);
     padding: 16px;
 }
-#gibush-ai-chat-team-picker.gaic-open {
+#gibush-ai-chat-team-picker.gaic-open,
+#gibush-ai-chat-assessee-picker.gaic-open {
     display: flex;
 }
-#gibush-ai-chat-team-picker .gaic-picker-panel {
+#gibush-ai-chat-team-picker .gaic-picker-panel,
+#gibush-ai-chat-assessee-picker .gaic-picker-panel {
     width: min(420px, 100%);
     background: #fff;
     border-radius: 14px;
@@ -488,23 +532,29 @@ article:has(#gibush-ai-chat-root),
     padding: 18px 18px 14px;
     text-align: right;
 }
-#gibush-ai-chat-team-picker .gaic-picker-title {
+#gibush-ai-chat-team-picker .gaic-picker-title,
+#gibush-ai-chat-assessee-picker .gaic-picker-title {
     margin: 0 0 6px;
     font-size: 16px;
     font-weight: 700;
 }
-#gibush-ai-chat-team-picker .gaic-picker-sub {
+#gibush-ai-chat-team-picker .gaic-picker-sub,
+#gibush-ai-chat-assessee-picker .gaic-picker-sub {
     margin: 0 0 14px;
     font-size: 13px;
     color: var(--gaic-muted);
 }
-#gibush-ai-chat-team-picker .gaic-team-grid {
+#gibush-ai-chat-team-picker .gaic-team-grid,
+#gibush-ai-chat-assessee-picker .gaic-team-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 14px;
+    max-height: min(52vh, 360px);
+    overflow-y: auto;
 }
-#gibush-ai-chat-team-picker button.gaic-team-btn {
+#gibush-ai-chat-team-picker button.gaic-team-btn,
+#gibush-ai-chat-assessee-picker button.gaic-team-btn {
     text-align: center;
     border: 1px solid var(--gaic-border);
     background: #fff;
@@ -513,20 +563,24 @@ article:has(#gibush-ai-chat-root),
     font-size: 14px;
     cursor: pointer;
 }
-#gibush-ai-chat-team-picker button.gaic-team-btn:hover {
+#gibush-ai-chat-team-picker button.gaic-team-btn:hover,
+#gibush-ai-chat-assessee-picker button.gaic-team-btn:hover {
     background: #f5f5f5;
 }
-#gibush-ai-chat-team-picker button.gaic-team-btn.gaic-selected {
+#gibush-ai-chat-team-picker button.gaic-team-btn.gaic-selected,
+#gibush-ai-chat-assessee-picker button.gaic-team-btn.gaic-selected {
     background: #2d3748;
     border-color: #2d3748;
     color: #fff;
 }
-#gibush-ai-chat-team-picker .gaic-picker-actions {
+#gibush-ai-chat-team-picker .gaic-picker-actions,
+#gibush-ai-chat-assessee-picker .gaic-picker-actions {
     display: flex;
     gap: 8px;
     justify-content: flex-start;
 }
-#gibush-ai-chat-team-picker .gaic-picker-actions button {
+#gibush-ai-chat-team-picker .gaic-picker-actions button,
+#gibush-ai-chat-assessee-picker .gaic-picker-actions button {
     border: 1px solid var(--gaic-border);
     background: #fff;
     border-radius: 8px;
@@ -534,12 +588,14 @@ article:has(#gibush-ai-chat-root),
     font-size: 13px;
     cursor: pointer;
 }
-#gibush-ai-chat-team-picker button#gibush-ai-chat-team-confirm {
+#gibush-ai-chat-team-picker button#gibush-ai-chat-team-confirm,
+#gibush-ai-chat-assessee-picker button#gibush-ai-chat-assessee-confirm {
     background: #2d3748;
     border-color: #2d3748;
     color: #fff;
 }
-#gibush-ai-chat-team-picker button#gibush-ai-chat-team-confirm:disabled {
+#gibush-ai-chat-team-picker button#gibush-ai-chat-team-confirm:disabled,
+#gibush-ai-chat-assessee-picker button#gibush-ai-chat-assessee-confirm:disabled {
     opacity: 0.45;
     cursor: not-allowed;
 }
@@ -601,6 +657,11 @@ article:has(#gibush-ai-chat-root),
 #gibush-ai-chat-preset-picker button.gaic-preset-item:hover {
     background: #f5f5f5;
 }
+#gibush-ai-chat-preset-picker button.gaic-preset-item:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    background: #f5f5f5;
+}
 #gibush-ai-chat-preset-picker .gaic-preset-summary {
     margin: 0 0 12px;
     font-size: 14px;
@@ -655,7 +716,8 @@ article:has(#gibush-ai-chat-root),
     #gibush-ai-chat-shell .gaic-composer {
         padding: 10px 12px 14px;
     }
-    #gibush-ai-chat-team-picker .gaic-team-grid {
+    #gibush-ai-chat-team-picker .gaic-team-grid,
+    #gibush-ai-chat-assessee-picker .gaic-team-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }

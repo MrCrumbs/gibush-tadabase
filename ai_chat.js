@@ -15,6 +15,7 @@
  * ACCESS: merge fields resolve per logged-in user on one shared page:
  *   - GIBUSH_AI_CHAT_USER_ROLE = "{loggedInUser.role}"
  *   - GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}" (required for מגבש)
+ *   - GIBUSH_AI_CHAT_INTERVIEW_TEAM_NUMBER = "{loggedInUser.צוות ראיון}" (interview-prep preset)
  *   - GIBUSH_AI_CHAT_USER_NAME = "{loggedInUser.name}"
  *   - GIBUSH_AI_CHAT_USER_RECORD_ID = "{loggedInUser.Record ID}" (required for מגבש)
  * Modes: מגבש → live_team; גישה לארכיון → archive; מנהל/מפקד גיבוש → full.
@@ -42,6 +43,16 @@
  * preset, or mode boundary.
  */
  
+TB.render("component_4", function (data) {
+    window.GIBUSH_AI_INTERVIEW_ASSESSEES = (data && data.records ? data.records : []).map(function (row) {
+        return {
+            id: row.id,
+            number: row.field_61 == null ? "" : String(row.field_61)
+        };
+    }).filter(function (row) {
+        return row.number && row.number.trim();
+    });
+});
 TB.render("component_3", function (data) {
     setTimeout(function () {
       $("#hichartsJS").remove();
@@ -58,6 +69,7 @@ TB.render("component_3", function (data) {
   // Tadabase merge fields — resolve per logged-in user.
   var GIBUSH_AI_CHAT_USER_ROLE = "{loggedInUser.role}";
   var GIBUSH_AI_CHAT_TEAM_NUMBER = "{loggedInUser.צוות שטח}";
+  var GIBUSH_AI_CHAT_INTERVIEW_TEAM_NUMBER = "{loggedInUser.צוות ראיון}";
   var GIBUSH_AI_CHAT_USER_NAME = "{loggedInUser.name}";
   var GIBUSH_AI_CHAT_USER_RECORD_ID = "{loggedInUser.Record ID}";
   
@@ -70,6 +82,9 @@ TB.render("component_3", function (data) {
   };
   
   var GIBUSH_AI_CHAT_STORAGE_KEY = "gibushAiChat_previousResponseId";
+  // Active free-chat team context; set during widget construction and updated by
+  // the team context bar chips. Defaults to the field team (צוות שטח).
+  var activeFreeChatTeam = null;
   // Legacy diagnostic token key is removed on write/clear. New diagnostic state
   // stores mode + token atomically in GIBUSH_AI_CHAT_DIAGNOSTIC_MODE_KEY.
   var GIBUSH_AI_CHAT_DIAGNOSTIC_STORAGE_KEY = "gibushAiChat_diagnosticResponseId";
@@ -221,6 +236,19 @@ TB.render("component_3", function (data) {
               "האם הפרופיל דומה גם בשליש האחרון.\n" +
               "אל תאפשר לתוצאה גבוהה בשקים או באלונקה רגילה לבדה להגדיר מועמד כמאוזן — " +
               "תן עדיפות לדפוס שחוזר בזחילות, בספרינטים ובאלונקה הסוציומטרית."
+      },
+      {
+          id: "interview_prep",
+          label: "הכנה לראיון",
+          requiresAssessee: true,
+          summary:
+              "בונה שתי שאלות ראיון מדויקות למועמד שנבחר, מתוך הנתונים שנאספו עד כה.",
+          user_prompt:
+              "הגיבוש הפיזי, הערכת השטח והסוציומטרי הסתיימו, וכעת המועמד עומד להיכנס לראיון.\n" +
+              "נתח את כלל המידע שנאסף על המועמד עד כה, ובנה עבור המגבש שתי שאלות ראיון בלבד, " +
+              "שהן השאלות בעלות הערך האבחוני הגבוה ביותר עבור מועמד זה.\n" +
+              "מטרת השאלות אינה לחזור על הציונים או על מה שכבר ידוע מהנתונים, אלא להעמיק " +
+              "בנקודות שנותרו לא ברורות, בדפוסים חריגים, בפערים או בסימני שאלה שעלו במהלך הגיבוש."
       }
   ];
   
@@ -257,7 +285,7 @@ TB.render("component_3", function (data) {
       }
       return raw;
   }
-  
+
   function gibushAiChatResolvedTeamNumber() {
       var raw = (GIBUSH_AI_CHAT_TEAM_NUMBER == null) ? "" : String(GIBUSH_AI_CHAT_TEAM_NUMBER).trim();
       // Tadabase leaves the literal "{loggedInUser...}" merge-field text in place
@@ -266,6 +294,56 @@ TB.render("component_3", function (data) {
           return null;
       }
       return raw;
+  }
+  
+  function gibushAiChatResolvedInterviewTeamNumber() {
+      var raw = (GIBUSH_AI_CHAT_INTERVIEW_TEAM_NUMBER == null) ? "" : String(GIBUSH_AI_CHAT_INTERVIEW_TEAM_NUMBER).trim();
+      if (!raw || raw.indexOf("{") === 0 || raw.toLowerCase() === "undefined" || raw.toLowerCase() === "null" || raw.toLowerCase() === "all") {
+          return null;
+      }
+      return raw;
+  }
+
+  /**
+   * Parse GIBUSH_AI_CHAT_INTERVIEW_TEAM_NUMBER (may be comma-separated, e.g. "4,5")
+   * into an array of distinct team number strings. Returns [] when unresolved.
+   */
+  function gibushAiChatInterviewTeamNumbers() {
+      var raw = gibushAiChatResolvedInterviewTeamNumber();
+      if (!raw) return [];
+      var parts = raw.split(",");
+      var seen = {};
+      var out = [];
+      for (var i = 0; i < parts.length; i++) {
+          var t = parts[i].trim();
+          if (t && !seen[t]) { seen[t] = true; out.push(t); }
+      }
+      return out;
+  }
+
+  function gibushAiChatTtnnTeam(assesseeNumber) {
+      var n = parseInt(String(assesseeNumber == null ? "" : assesseeNumber).trim(), 10);
+      if (!isFinite(n) || n <= 0) return null;
+      return String(Math.floor(n / 100));
+  }
+
+  function gibushAiChatInterviewAssessees(interviewTeam) {
+      var rows = window.GIBUSH_AI_INTERVIEW_ASSESSEES;
+      if (!Array.isArray(rows)) return [];
+      var wanted = interviewTeam ? String(interviewTeam) : null;
+      var seen = {};
+      var out = [];
+      for (var i = 0; i < rows.length; i++) {
+          var number = rows[i] && rows[i].number != null ? String(rows[i].number).trim() : "";
+          if (!number || seen[number]) continue;
+          if (wanted && gibushAiChatTtnnTeam(number) !== wanted) continue;
+          seen[number] = true;
+          out.push({ id: rows[i].id, number: number });
+      }
+      out.sort(function (a, b) {
+          return parseInt(a.number, 10) - parseInt(b.number, 10);
+      });
+      return out;
   }
   
   function gibushAiChatResolvedUserName() {
@@ -292,6 +370,7 @@ TB.render("component_3", function (data) {
   function gibushAiChatResolveAccess() {
       var role = gibushAiChatResolvedRole();
       var teamNumber = gibushAiChatResolvedTeamNumber();
+      var interviewTeamNumber = gibushAiChatResolvedInterviewTeamNumber();
       var userName = gibushAiChatResolvedUserName();
       var userRecordId = gibushAiChatResolvedUserRecordId();
       if (!role) {
@@ -299,6 +378,7 @@ TB.render("component_3", function (data) {
               role: null,
               mode: null,
               teamNumber: teamNumber,
+              interviewTeamNumber: interviewTeamNumber,
               userName: userName,
               userRecordId: userRecordId,
               allowed: false,
@@ -312,6 +392,7 @@ TB.render("component_3", function (data) {
               role: role,
               mode: null,
               teamNumber: teamNumber,
+              interviewTeamNumber: interviewTeamNumber,
               userName: userName,
               userRecordId: userRecordId,
               allowed: false,
@@ -324,6 +405,7 @@ TB.render("component_3", function (data) {
               role: role,
               mode: mode,
               teamNumber: null,
+              interviewTeamNumber: interviewTeamNumber,
               userName: userName,
               userRecordId: userRecordId,
               allowed: false,
@@ -336,6 +418,7 @@ TB.render("component_3", function (data) {
               role: role,
               mode: mode,
               teamNumber: teamNumber,
+              interviewTeamNumber: interviewTeamNumber,
               userName: userName,
               userRecordId: null,
               allowed: false,
@@ -353,6 +436,7 @@ TB.render("component_3", function (data) {
           role: role,
           mode: mode,
           teamNumber: teamNumber,
+          interviewTeamNumber: interviewTeamNumber,
           userName: userName,
           userRecordId: userRecordId,
           allowed: true,
@@ -361,13 +445,23 @@ TB.render("component_3", function (data) {
       };
   }
   
-  /** Payload scope object for every ask/stream request. Null if access denied. */
+  /**
+   * Payload scope object for every ask/stream request. Null if access denied.
+   * For live_team free chat, uses activeFreeChatTeam (set by the context bar)
+   * instead of always defaulting to the field team.
+   */
   function gibushAiChatScopePayload() {
       var access = gibushAiChatResolveAccess();
       if (!access.allowed) return null;
       var scope = { role: access.role };
       if (access.mode === "live_team" && access.teamNumber) {
-          scope.team_number = String(access.teamNumber);
+          // Prefer the actively selected free-chat team when set; fall back to
+          // the field team so diagnostic overrides still work correctly.
+          var effectiveTeam = activeFreeChatTeam || String(access.teamNumber);
+          scope.team_number = effectiveTeam;
+      }
+      if (access.interviewTeamNumber) {
+          scope.interview_team_number = String(access.interviewTeamNumber);
       }
       if (access.userName) {
           scope.user_name = access.userName;
@@ -570,6 +664,7 @@ TB.render("component_3", function (data) {
               team_number: String(parsed.team_number),
               preset: String(parsed.preset),
               label: parsed.label ? String(parsed.label) : String(parsed.preset),
+              assessee_number: parsed.assessee_number ? String(parsed.assessee_number) : null,
               response_id: (
                   typeof parsed.response_id === "string" && parsed.response_id
                       ? parsed.response_id
@@ -593,6 +688,7 @@ TB.render("component_3", function (data) {
                   team_number: String(mode.team_number),
                   preset: String(mode.preset),
                   label: mode.label ? String(mode.label) : String(mode.preset),
+                  assessee_number: mode.assessee_number ? String(mode.assessee_number) : null,
                   response_id: mode.response_id ? String(mode.response_id) : null
               })
           );
@@ -600,12 +696,14 @@ TB.render("component_3", function (data) {
       } catch (e) { /* ignore */ }
   }
   
-  function gibushAiChatDiagnosticContextMatches(mode, teamNumber, presetId) {
-      return !!(
-          mode &&
-          String(mode.team_number) === String(teamNumber) &&
-          String(mode.preset) === String(presetId)
-      );
+  function gibushAiChatDiagnosticContextMatches(mode, teamNumber, presetId, assesseeNumber) {
+      if (!mode || String(mode.team_number) !== String(teamNumber) || String(mode.preset) !== String(presetId)) {
+          return false;
+      }
+      if (presetId === "interview_prep") {
+          return String(mode.assessee_number || "") === String(assesseeNumber || "");
+      }
+      return true;
   }
   
   /**
@@ -622,18 +720,22 @@ TB.render("component_3", function (data) {
       return wasActive;
   }
   
-  function gibushAiChatEnterDiagnosticMode(teamNumber, preset, responseId) {
+  function gibushAiChatEnterDiagnosticMode(teamNumber, preset, responseId, assesseeNumber) {
       if (!teamNumber || !preset) return;
       gibushAiChatSaveDiagnosticMode({
           team_number: String(teamNumber),
           preset: preset.id || String(preset),
           label: preset.label || preset.id || String(preset),
+          assessee_number: assesseeNumber ? String(assesseeNumber) : null,
           response_id: responseId || null
       });
   }
   
   function gibushAiChatDiagnosticModeLabel(mode) {
       if (!mode) return "";
+      if (mode.preset === "interview_prep" && mode.assessee_number) {
+          return "מצב אבחון · הכנה לראיון · מועמד " + mode.assessee_number;
+      }
       return "מצב אבחון · צוות " + mode.team_number + " · " + mode.label;
   }
   
@@ -662,10 +764,13 @@ TB.render("component_3", function (data) {
           .replace(/"/g, "&quot;");
   }
   
-  /** Escape HTML, then turn **bold** into <strong>. Safe for model/user text. */
+  /** Escape HTML, then turn **bold** / *bold* into <strong>. Safe for model/user text. */
   function gibushAiChatFormatInlineMarkdown(text) {
       var escaped = gibushAiChatEscapeHtml(text == null ? "" : text);
-      return escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      // Double asterisks first so **x** doesn't get partially consumed as two singles.
+      escaped = escaped.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      escaped = escaped.replace(/\*([^*]+)\*/g, "<strong>$1</strong>");
+      return escaped;
   }
   
   function gibushAiChatIsMarkdownTableSeparator(line) {
@@ -858,11 +963,67 @@ TB.render("component_3", function (data) {
       h2.id = "gibush-ai-chat-title";
       h2.textContent = "שאל את ה-AI";
       var access = gibushAiChatResolveAccess();
-      var scopeLine = document.createElement("div");
-      scopeLine.className = "gaic-scope-line";
-      scopeLine.textContent = "מרחב נתונים: " + access.scopeLabel;
+
+      // --- Team context bar ---
+      // For live_team mode: show selectable chips when interview teams are present,
+      // otherwise show a static label. Initialise activeFreeChatTeam here.
+      var teamCtxBar = document.createElement("div");
+      teamCtxBar.id = "gibush-ai-chat-team-ctx";
+      teamCtxBar.className = "gaic-team-ctx";
+
+      if (access.mode === "live_team" && access.teamNumber) {
+          var fieldTeam = String(access.teamNumber);
+          var interviewTeams = gibushAiChatInterviewTeamNumbers();
+          // Build deduplicated list: field team first, then any interview teams
+          // that differ from it.
+          var allTeams = [fieldTeam];
+          for (var _ti = 0; _ti < interviewTeams.length; _ti++) {
+              if (interviewTeams[_ti] !== fieldTeam) allTeams.push(interviewTeams[_ti]);
+          }
+
+          activeFreeChatTeam = fieldTeam; // default
+
+          if (allTeams.length <= 1) {
+              // Non-selectable static label
+              var teamLabel = document.createElement("span");
+              teamLabel.className = "gaic-team-chip-label";
+              teamLabel.textContent = "צוות: " + fieldTeam;
+              teamCtxBar.appendChild(teamLabel);
+          } else {
+              // Selectable chips
+              var ctxPrefix = document.createElement("span");
+              ctxPrefix.className = "gaic-team-ctx-prefix";
+              ctxPrefix.textContent = "צוות:";
+              teamCtxBar.appendChild(ctxPrefix);
+              for (var _ci = 0; _ci < allTeams.length; _ci++) {
+                  (function(teamNum) {
+                      var chip = document.createElement("button");
+                      chip.type = "button";
+                      chip.className = "gaic-team-chip" + (teamNum === fieldTeam ? " gaic-selected" : "");
+                      chip.textContent = teamNum;
+                      chip.setAttribute("data-team", teamNum);
+                      chip.addEventListener("click", function() {
+                          activeFreeChatTeam = teamNum;
+                          var chips = teamCtxBar.querySelectorAll("button.gaic-team-chip");
+                          for (var k = 0; k < chips.length; k++) {
+                              chips[k].classList.toggle("gaic-selected", chips[k].getAttribute("data-team") === teamNum);
+                          }
+                      });
+                      teamCtxBar.appendChild(chip);
+                  })(allTeams[_ci]);
+              }
+          }
+      } else if (access.mode !== "live_team") {
+          // archive / full — show scope label as before but in same element
+          var scopeLbl = document.createElement("span");
+          scopeLbl.className = "gaic-team-chip-label";
+          scopeLbl.textContent = "מרחב נתונים: " + access.scopeLabel;
+          teamCtxBar.appendChild(scopeLbl);
+      }
+      // (If live_team but no teamNumber — access.allowed is already false)
+
       headLeft.appendChild(h2);
-      headLeft.appendChild(scopeLine);
+      headLeft.appendChild(teamCtxBar);
       if (!access.allowed) {
           var denyLine = document.createElement("div");
           denyLine.className = "gaic-scope-deny";
@@ -986,6 +1147,9 @@ TB.render("component_3", function (data) {
       var teamPicker = null;
       var pendingDiagnosticPreset = null;
       var selectedDiagnosticTeam = null;
+      var assesseePicker = null;
+      var selectedDiagnosticAssessee = null;
+      var selectedInterviewTeamForPrep = null; // chosen interview team inside assessee picker
       var presetPicker = null;
       var pendingPresetConfirm = null;
       // Team picker only for full access; live_team starts diagnostics on its fixed team.
@@ -1019,7 +1183,34 @@ TB.render("component_3", function (data) {
               teamGrid.appendChild(teamBtn);
           }
       }
-  
+
+      if (gibushAiChatDiagnosticsEnabled()) {
+          assesseePicker = document.createElement("div");
+          assesseePicker.id = "gibush-ai-chat-assessee-picker";
+          assesseePicker.setAttribute("dir", "rtl");
+          assesseePicker.setAttribute("role", "dialog");
+          assesseePicker.setAttribute("aria-modal", "true");
+          assesseePicker.setAttribute("aria-labelledby", "gibush-ai-chat-assessee-picker-title");
+          // Two inner steps: "team" (only shown when multiple interview teams exist)
+          // and "assessee" (always shown after team is selected or if only one team).
+          assesseePicker.innerHTML =
+              '<div class="gaic-picker-panel">' +
+              '<h3 class="gaic-picker-title" id="gibush-ai-chat-assessee-picker-title">נא לבחור מועמד לראיון</h3>' +
+              '<p class="gaic-picker-sub" id="gibush-ai-chat-assessee-picker-sub"></p>' +
+              '<div class="gaic-assessee-step" data-gaic-assessee-step="team" hidden>' +
+              '<p class="gaic-picker-step-label">בחר צוות ראיון:</p>' +
+              '<div class="gaic-team-grid" id="gibush-ai-chat-assessee-team-grid"></div>' +
+              '</div>' +
+              '<div class="gaic-assessee-step" data-gaic-assessee-step="assessee">' +
+              '<div class="gaic-team-grid" id="gibush-ai-chat-assessee-grid"></div>' +
+              '</div>' +
+              '<div class="gaic-picker-actions">' +
+              '<button type="button" id="gibush-ai-chat-assessee-confirm" disabled>הפעל ניתוח</button>' +
+              '<button type="button" id="gibush-ai-chat-assessee-cancel">ביטול</button>' +
+              "</div></div>";
+          root.appendChild(assesseePicker);
+      }
+
       if (gibushAiChatDiagnosticsEnabled()) {
           presetPicker = document.createElement("div");
           presetPicker.id = "gibush-ai-chat-preset-picker";
@@ -1090,6 +1281,10 @@ TB.render("component_3", function (data) {
     var teamConfirmBtn = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-confirm") : null;
     var teamCancelBtn = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-cancel") : null;
     var teamPickerSub = teamPicker ? teamPicker.querySelector("#gibush-ai-chat-team-picker-sub") : null;
+    var assesseeConfirmBtn = assesseePicker ? assesseePicker.querySelector("#gibush-ai-chat-assessee-confirm") : null;
+    var assesseeCancelBtn = assesseePicker ? assesseePicker.querySelector("#gibush-ai-chat-assessee-cancel") : null;
+    var assesseePickerSub = assesseePicker ? assesseePicker.querySelector("#gibush-ai-chat-assessee-picker-sub") : null;
+    var assesseeGrid = assesseePicker ? assesseePicker.querySelector("#gibush-ai-chat-assessee-grid") : null;
     var presetCloseBtn = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-close") : null;
     var presetConfirmBtn = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-confirm") : null;
     var presetBackBtn = presetPicker ? presetPicker.querySelector("#gibush-ai-chat-preset-back") : null;
@@ -1290,7 +1485,38 @@ TB.render("component_3", function (data) {
           if (!gibushAiChatResolveAccess().allowed) return;
           pendingPresetConfirm = null;
           showPresetStep("list");
+          refreshInterviewPrepPresetAvailability();
           presetPicker.classList.add("gaic-open");
+      }
+
+      function refreshInterviewPrepPresetAvailability() {
+          if (!presetPicker) return;
+          var accessNow = gibushAiChatResolveAccess();
+          // For availability check, test all interview teams (handles "4,5" multi-team).
+          var interviewTeamsNow = gibushAiChatInterviewTeamNumbers();
+          var rosterForCheck;
+          if (interviewTeamsNow.length > 0) {
+              // Check each parsed team individually so the comma-separated raw value
+              // is never passed as a filter to gibushAiChatInterviewAssessees.
+              rosterForCheck = [];
+              for (var _rti = 0; _rti < interviewTeamsNow.length; _rti++) {
+                  var partial = gibushAiChatInterviewAssessees(interviewTeamsNow[_rti]);
+                  rosterForCheck = rosterForCheck.concat(partial);
+              }
+          } else {
+              rosterForCheck = gibushAiChatInterviewAssessees(null);
+          }
+          var interviewReady = rosterForCheck.length > 0 && (
+              accessNow.mode === "full" || interviewTeamsNow.length > 0
+          );
+          var items = presetPicker.querySelectorAll("button.gaic-preset-item[data-preset]");
+          for (var i = 0; i < items.length; i++) {
+              if (items[i].getAttribute("data-preset") !== "interview_prep") continue;
+              items[i].disabled = !interviewReady;
+              items[i].title = interviewReady
+                  ? ""
+                  : "אין מועמדים לראיון בטבלה או שצוות הראיון לא זוהה";
+          }
       }
   
       function openPresetConfirm(preset) {
@@ -1308,11 +1534,105 @@ TB.render("component_3", function (data) {
           if (!preset) return;
           var currentAccess = gibushAiChatResolveAccess();
           closePresetPicker();
+          if (preset.id === "interview_prep") {
+              openAssesseePicker(preset);
+              return;
+          }
           if (currentAccess.mode === "live_team" && currentAccess.teamNumber) {
               sendDiagnostic(preset, currentAccess.teamNumber);
               return;
           }
           openTeamPicker(preset);
+      }
+
+      function closeAssesseePicker() {
+          if (!assesseePicker) return;
+          assesseePicker.classList.remove("gaic-open");
+          pendingDiagnosticPreset = null;
+          selectedDiagnosticAssessee = null;
+          selectedInterviewTeamForPrep = null;
+          if (assesseeConfirmBtn) assesseeConfirmBtn.disabled = true;
+      }
+
+      function _assesseePickerShowAssessees(teamFilter) {
+          var roster = gibushAiChatInterviewAssessees(teamFilter);
+          if (assesseeGrid) {
+              assesseeGrid.innerHTML = "";
+              for (var i = 0; i < roster.length; i++) {
+                  var btn = document.createElement("button");
+                  btn.type = "button";
+                  btn.className = "gaic-team-btn";
+                  btn.textContent = roster[i].number;
+                  btn.setAttribute("data-assessee", roster[i].number);
+                  assesseeGrid.appendChild(btn);
+              }
+          }
+          // Reset assessee selection when team changes
+          selectedDiagnosticAssessee = null;
+          if (assesseeConfirmBtn) assesseeConfirmBtn.disabled = true;
+      }
+
+      function openAssesseePicker(preset) {
+          if (!assesseePicker || requestInFlight) return;
+          var interviewTeams = gibushAiChatInterviewTeamNumbers();
+          pendingDiagnosticPreset = preset;
+          selectedDiagnosticAssessee = null;
+          selectedInterviewTeamForPrep = null;
+          if (assesseeConfirmBtn) assesseeConfirmBtn.disabled = true;
+
+          var teamStep = assesseePicker.querySelector('[data-gaic-assessee-step="team"]');
+          var assesseeStep = assesseePicker.querySelector('[data-gaic-assessee-step="assessee"]');
+          var teamGridEl = assesseePicker.querySelector("#gibush-ai-chat-assessee-team-grid");
+
+          if (interviewTeams.length > 1) {
+              // Show team selection step first
+              if (teamGridEl) {
+                  teamGridEl.innerHTML = "";
+                  for (var ti = 0; ti < interviewTeams.length; ti++) {
+                      (function(tNum) {
+                          var tb = document.createElement("button");
+                          tb.type = "button";
+                          tb.className = "gaic-team-btn";
+                          tb.textContent = tNum;
+                          tb.setAttribute("data-interview-team", tNum);
+                          tb.addEventListener("click", function() {
+                              var tbs = teamGridEl.querySelectorAll("button.gaic-team-btn");
+                              for (var k = 0; k < tbs.length; k++) {
+                                  tbs[k].classList.toggle("gaic-selected", tbs[k] === tb);
+                              }
+                              selectedInterviewTeamForPrep = tNum;
+                              if (assesseePickerSub) {
+                                  assesseePickerSub.textContent =
+                                      (preset.label || "") + " · צוות ראיון " + tNum;
+                              }
+                              _assesseePickerShowAssessees(tNum);
+                          });
+                          teamGridEl.appendChild(tb);
+                      })(interviewTeams[ti]);
+                  }
+              }
+              if (teamStep) teamStep.hidden = false;
+              if (assesseePickerSub) assesseePickerSub.textContent = (preset.label || "") + " · בחר צוות ראיון";
+              // Start with empty assessee list until team chosen
+              if (assesseeGrid) assesseeGrid.innerHTML = "";
+          } else {
+              // Single interview team (or zero) — skip team step
+              var singleTeam = interviewTeams.length === 1 ? interviewTeams[0] : null;
+              selectedInterviewTeamForPrep = singleTeam;
+              if (teamStep) teamStep.hidden = true;
+              if (assesseePickerSub) {
+                  if (singleTeam) {
+                      assesseePickerSub.textContent =
+                          (preset.label || "") + " · צוות ראיון " + singleTeam;
+                  } else {
+                      assesseePickerSub.textContent = preset.label || "";
+                  }
+              }
+              _assesseePickerShowAssessees(singleTeam);
+          }
+
+          if (assesseeStep) assesseeStep.hidden = false;
+          assesseePicker.classList.add("gaic-open");
       }
   
       function closeTeamPicker() {
@@ -1531,7 +1851,8 @@ TB.render("component_3", function (data) {
               gibushAiChatEnterDiagnosticMode(
                   ctx.teamNumber,
                   presetMeta || { id: ctx.presetId, label: ctx.presetId },
-                  responseId
+                  responseId,
+                  ctx.assesseeNumber
               );
               refreshDiagModeBar();
           }
@@ -1953,6 +2274,7 @@ TB.render("component_3", function (data) {
               diagnostic: !!options.diagnostic,
               teamNumber: options.teamNumber || null,
               presetId: options.presetId || null,
+              assesseeNumber: options.assesseeNumber || null,
               expensive: !!body.expensive,
               epoch: turn.epoch,
               turn: turn,
@@ -2022,8 +2344,12 @@ TB.render("component_3", function (data) {
           clearPendingAttachment();
           scrollMessagesToBottom();
   
-          // Free text leaves diagnostic mode and resumes the separate free thread.
+          // Free text leaves diagnostic mode unless interview-prep follow-up.
           var priorDiagMode = gibushAiChatLoadDiagnosticMode();
+          if (priorDiagMode && priorDiagMode.preset === "interview_prep" && priorDiagMode.assessee_number) {
+              sendInterviewPrepFollowUp(question || visibleText);
+              return;
+          }
           var continuedFromDiagnostic = false;
           if (priorDiagMode) {
               continuedFromDiagnostic = !!exitDiagnosticMode(false);
@@ -2067,29 +2393,76 @@ TB.render("component_3", function (data) {
           postAsk(body, { diagnostic: false });
       }
   
-      function sendDiagnostic(preset, teamNumber) {
+      function sendInterviewPrepFollowUp(followUpQuestion) {
+          var mode = gibushAiChatLoadDiagnosticMode();
+          if (!mode || mode.preset !== "interview_prep" || !mode.assessee_number) return;
+          var currentAccess = gibushAiChatResolveAccess();
+          if (!currentAccess.allowed) return;
+          var teamNumber = mode.team_number;
+          var scope = gibushAiChatScopePayload();
+          if (!scope) return;
+          scope.team_number = String(teamNumber);
+          if (currentAccess.interviewTeamNumber) {
+              scope.interview_team_number = String(currentAccess.interviewTeamNumber);
+          }
+          var body = {
+              question: followUpQuestion,
+              diagnostic_preset: "interview_prep",
+              team_number: String(teamNumber),
+              assessee_number: String(mode.assessee_number),
+              scope: scope,
+              expensive: true
+          };
+          if (mode.response_id) {
+              body.previous_response_id = mode.response_id;
+          }
+          postAsk(body, {
+              diagnostic: true,
+              teamNumber: String(teamNumber),
+              presetId: "interview_prep",
+              assesseeNumber: String(mode.assessee_number)
+          });
+      }
+
+      function sendDiagnostic(preset, teamNumber, assesseeNumber) {
           if (requestInFlight || !preset || !teamNumber) return;
           var currentAccess = gibushAiChatResolveAccess();
           if (!currentAccess.allowed || !gibushAiChatDiagnosticsEnabled()) return;
-          if (currentAccess.mode === "live_team" && String(teamNumber) !== String(currentAccess.teamNumber)) {
-              return;
+          var isInterviewPrep = preset.id === "interview_prep";
+          if (isInterviewPrep && !assesseeNumber) return;
+          if (currentAccess.mode === "live_team") {
+              if (isInterviewPrep) {
+                  // teamNumber is the TTNN-derived team (single number). Validate it
+                  // against the parsed interview team list (which may be "4,5" raw).
+                  var allowedInterviewTeams = gibushAiChatInterviewTeamNumbers();
+                  if (
+                      allowedInterviewTeams.length > 0 &&
+                      allowedInterviewTeams.indexOf(String(teamNumber)) === -1
+                  ) {
+                      return;
+                  }
+              } else if (String(teamNumber) !== String(currentAccess.teamNumber)) {
+                  return;
+              }
           }
           // Read the old context before changing the banner. A response id is
-          // valid only for the exact same team + preset; either boundary starts
-          // a new diagnostic thread.
+          // valid only for the exact same team + preset (+ assessee for interview prep).
           var previousMode = gibushAiChatLoadDiagnosticMode();
           var continueDiagnostic = gibushAiChatDiagnosticContextMatches(
               previousMode,
               teamNumber,
-              preset.id
+              preset.id,
+              assesseeNumber
           );
           var diagnosticResponseId = null;
           if (continueDiagnostic) {
               diagnosticResponseId = previousMode.response_id || null;
           }
-  
+
           var history = gibushAiChatLoadHistory();
-          var visibleText = "צוות " + teamNumber + " · " + preset.label + "\n\n" + preset.user_prompt;
+          var visibleText = isInterviewPrep
+              ? ("מועמד " + assesseeNumber + " · " + preset.label + "\n\n" + preset.user_prompt)
+              : ("צוות " + teamNumber + " · " + preset.label + "\n\n" + preset.user_prompt);
           var userMessage = {
               role: "user",
               text: visibleText,
@@ -2098,20 +2471,25 @@ TB.render("component_3", function (data) {
               team_number: String(teamNumber),
               preset: preset.id
           };
+          if (isInterviewPrep) {
+              userMessage.assessee_number = String(assesseeNumber);
+          }
           history.push(userMessage);
           gibushAiChatSaveHistory(history);
           gibushAiChatRenderMessage(messages, userMessage);
-          gibushAiChatEnterDiagnosticMode(teamNumber, preset, diagnosticResponseId);
+          gibushAiChatEnterDiagnosticMode(teamNumber, preset, diagnosticResponseId, assesseeNumber);
           refreshDiagModeBar();
           scrollMessagesToBottom();
-  
+
           var scope = gibushAiChatScopePayload();
           if (!scope) return;
-          // full users still send the picker-chosen team; live_team already has it.
-          if (currentAccess.mode === "full") {
+          if (currentAccess.mode === "full" || isInterviewPrep) {
               scope.team_number = String(teamNumber);
           }
-  
+          if (currentAccess.interviewTeamNumber) {
+              scope.interview_team_number = String(currentAccess.interviewTeamNumber);
+          }
+
           var body = {
               question: preset.user_prompt,
               diagnostic_preset: preset.id,
@@ -2119,15 +2497,19 @@ TB.render("component_3", function (data) {
               scope: scope,
               expensive: true
           };
-  
+          if (isInterviewPrep) {
+              body.assessee_number = String(assesseeNumber);
+          }
+
           if (diagnosticResponseId) {
               body.previous_response_id = diagnosticResponseId;
           }
-  
+
           postAsk(body, {
               diagnostic: true,
               teamNumber: String(teamNumber),
-              presetId: preset.id
+              presetId: preset.id,
+              assesseeNumber: isInterviewPrep ? String(assesseeNumber) : null
           });
       }
   
@@ -2207,7 +2589,7 @@ TB.render("component_3", function (data) {
           });
           presetPicker.querySelector("#gibush-ai-chat-preset-list").addEventListener("click", function (e) {
               var item = e.target.closest("button.gaic-preset-item");
-              if (!item) return;
+              if (!item || item.disabled) return;
               var presetId = item.getAttribute("data-preset");
               var preset = null;
               for (var pi = 0; pi < GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.length; pi++) {
@@ -2258,6 +2640,40 @@ TB.render("component_3", function (data) {
                   var team = selectedDiagnosticTeam;
                   closeTeamPicker();
                   sendDiagnostic(preset, team);
+              });
+          }
+      }
+
+      if (assesseePicker) {
+          assesseePicker.addEventListener("click", function (e) {
+              if (e.target === assesseePicker) {
+                  closeAssesseePicker();
+              }
+          });
+          if (assesseeGrid) {
+              assesseeGrid.addEventListener("click", function (e) {
+                  var btn = e.target.closest("button.gaic-team-btn");
+                  if (!btn) return;
+                  var buttons = assesseeGrid.querySelectorAll("button.gaic-team-btn");
+                  for (var i = 0; i < buttons.length; i++) {
+                      buttons[i].classList.toggle("gaic-selected", buttons[i] === btn);
+                  }
+                  selectedDiagnosticAssessee = btn.getAttribute("data-assessee");
+                  if (assesseeConfirmBtn) assesseeConfirmBtn.disabled = !selectedDiagnosticAssessee;
+              });
+          }
+          if (assesseeCancelBtn) {
+              assesseeCancelBtn.addEventListener("click", closeAssesseePicker);
+          }
+          if (assesseeConfirmBtn) {
+              assesseeConfirmBtn.addEventListener("click", function () {
+                  if (!pendingDiagnosticPreset || !selectedDiagnosticAssessee) return;
+                  var preset = pendingDiagnosticPreset;
+                  var number = selectedDiagnosticAssessee;
+                  var team = gibushAiChatTtnnTeam(number);
+                  closeAssesseePicker();
+                  if (!team) return;
+                  sendDiagnostic(preset, team, number);
               });
           }
       }
