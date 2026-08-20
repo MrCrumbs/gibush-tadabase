@@ -170,6 +170,16 @@ function createTable(gradesData) {
 
     const columns = [
         {
+            id: 'place',
+            name: '#',
+            sort: false,
+            width: '20px',
+            // Re-number after Grid.js re-renders so sorting doesn't scramble the index column.
+            formatter: function () {
+                return gridjs.html('<span class="grades-place"></span>');
+            }
+        },
+        {
             id: 'assesseeNumber',
             name: 'מוערך',
             sort: true,
@@ -184,7 +194,14 @@ function createTable(gradesData) {
         }
     ].concat(buildActivityColumns(launched));
 
-    new gridjs.Grid({
+    function updatePlaceNumbers() {
+        const placeEls = document.querySelectorAll('#grades-table-container .grades-place');
+        placeEls.forEach(function (el, idx) {
+            el.textContent = String(idx + 1);
+        });
+    }
+
+    const grid = new gridjs.Grid({
         data: tableData,
         columns: columns,
         height: "calc(100vh - 100px)",
@@ -215,5 +232,14 @@ function createTable(gradesData) {
             td: 'grades-cell'
         },
         fixedHeader: true
-    }).render(document.getElementById('grades-table-container'));
+    });
+
+    // Trigger after Grid.js finishes rendering (initial load + sorting/filtering changes).
+    grid.config.store.subscribe(function (state, prevState) {
+        if (prevState && state && prevState.status < state.status && state.status === 3) {
+            updatePlaceNumbers();
+        }
+    });
+
+    grid.render(document.getElementById('grades-table-container'));
 }

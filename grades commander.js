@@ -108,6 +108,16 @@ function buildActivityColumns(launchedActivities) {
 function buildBaseColumns(launchedActivities) {
     return [
         {
+            id: 'place',
+            name: '#',
+            sort: false,
+            width: '20px',
+            // Re-number after Grid.js renders, so sorting does not scramble this column.
+            formatter: function () {
+                return gridjs.html('<span class="grades-place"></span>');
+            }
+        },
+        {
             id: 'assesseeNumber',
             name: 'מוערך',
             sort: true,
@@ -211,6 +221,14 @@ function createTable(gradesData) {
     createTeamFilters(availableTeams, filtersContainer);
 
     var initialLaunched = unionLaunchedActivities(launchedByTeam);
+
+    function updatePlaceNumbers() {
+        const placeEls = document.querySelectorAll('#grades-table-container .grades-place');
+        placeEls.forEach(function (el, idx) {
+            el.textContent = String(idx + 1);
+        });
+    }
+
     window.gradesLaunchedByTeam = launchedByTeam;
     window.originalTableData = tableData;
     window.gradesGrid = new gridjs.Grid({
@@ -246,7 +264,15 @@ function createTable(gradesData) {
             td: 'grades-cell'
         },
         fixedHeader: true
-    }).render(document.getElementById('grades-table-container'));
+    });
+
+    window.gradesGrid.config.store.subscribe(function (state, prevState) {
+        if (prevState && state && prevState.status < state.status && state.status === 3) {
+            updatePlaceNumbers();
+        }
+    });
+
+    window.gradesGrid.render(document.getElementById('grades-table-container'));
 }
 
 function createTeamFilters(teams, container) {
