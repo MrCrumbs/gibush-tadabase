@@ -511,12 +511,16 @@ article:has(#gibush-ai-chat-root),
 #gibush-ai-chat-assessee-picker {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    z-index: 10050;
     display: none;
     align-items: center;
     justify-content: center;
     background: rgba(15, 15, 15, 0.35);
     padding: 16px;
+}
+#gibush-ai-chat-team-picker[hidden],
+#gibush-ai-chat-assessee-picker[hidden] {
+    display: none !important;
 }
 #gibush-ai-chat-team-picker.gaic-open,
 #gibush-ai-chat-assessee-picker.gaic-open {
@@ -603,12 +607,15 @@ article:has(#gibush-ai-chat-root),
 #gibush-ai-chat-preset-picker {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    z-index: 10050;
     display: none;
     align-items: center;
     justify-content: center;
     background: rgba(15, 15, 15, 0.35);
     padding: 16px;
+}
+#gibush-ai-chat-preset-picker[hidden] {
+    display: none !important;
 }
 #gibush-ai-chat-preset-picker.gaic-open {
     display: flex;

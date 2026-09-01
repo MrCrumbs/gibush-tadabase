@@ -515,6 +515,23 @@ TB.render("component_3", function (data) {
       }
       return document.querySelector(".x-type-html.t-html") || document.body;
   }
+
+  /** Mount modal overlays on <body> so position:fixed is not clipped by transformed ancestors (e.g. slide-out AI panel). */
+  function gibushAiChatMountModalOverlay(el) {
+      el.hidden = true;
+      document.body.appendChild(el);
+      return el;
+  }
+
+  function gibushAiChatOpenModalOverlay(el) {
+      el.hidden = false;
+      el.classList.add("gaic-open");
+  }
+
+  function gibushAiChatCloseModalOverlay(el) {
+      el.classList.remove("gaic-open");
+      el.hidden = true;
+  }
   
   function gibushAiChatLoadHistory() {
       try {
@@ -1169,7 +1186,7 @@ TB.render("component_3", function (data) {
               '<button type="button" id="gibush-ai-chat-team-confirm" disabled>הפעל ניתוח</button>' +
               '<button type="button" id="gibush-ai-chat-team-cancel">ביטול</button>' +
               "</div></div>";
-          root.appendChild(teamPicker);
+          gibushAiChatMountModalOverlay(teamPicker);
   
           var teamGrid = teamPicker.querySelector("#gibush-ai-chat-team-grid");
           // Keep in sync with misc helpers_gibush.MAX_TEAM_NUMBER (currently 14).
@@ -1208,7 +1225,7 @@ TB.render("component_3", function (data) {
               '<button type="button" id="gibush-ai-chat-assessee-confirm" disabled>הפעל ניתוח</button>' +
               '<button type="button" id="gibush-ai-chat-assessee-cancel">ביטול</button>' +
               "</div></div>";
-          root.appendChild(assesseePicker);
+          gibushAiChatMountModalOverlay(assesseePicker);
       }
 
       if (gibushAiChatDiagnosticsEnabled()) {
@@ -1238,7 +1255,7 @@ TB.render("component_3", function (data) {
               '<button type="button" id="gibush-ai-chat-preset-confirm">המשך</button>' +
               '<button type="button" id="gibush-ai-chat-preset-back">חזרה</button>' +
               "</div></div></div>";
-          root.appendChild(presetPicker);
+          gibushAiChatMountModalOverlay(presetPicker);
   
           var presetList = presetPicker.querySelector("#gibush-ai-chat-preset-list");
           GIBUSH_AI_CHAT_DIAGNOSTIC_PRESETS.forEach(function (preset) {
@@ -1475,18 +1492,18 @@ TB.render("component_3", function (data) {
   
       function closePresetPicker() {
           if (!presetPicker) return;
-          presetPicker.classList.remove("gaic-open");
+          gibushAiChatCloseModalOverlay(presetPicker);
           pendingPresetConfirm = null;
           showPresetStep("list");
       }
-  
+
       function openPresetPicker() {
           if (!presetPicker || requestInFlight) return;
           if (!gibushAiChatResolveAccess().allowed) return;
           pendingPresetConfirm = null;
           showPresetStep("list");
           refreshInterviewPrepPresetAvailability();
-          presetPicker.classList.add("gaic-open");
+          gibushAiChatOpenModalOverlay(presetPicker);
       }
 
       function refreshInterviewPrepPresetAvailability() {
@@ -1547,7 +1564,7 @@ TB.render("component_3", function (data) {
 
       function closeAssesseePicker() {
           if (!assesseePicker) return;
-          assesseePicker.classList.remove("gaic-open");
+          gibushAiChatCloseModalOverlay(assesseePicker);
           pendingDiagnosticPreset = null;
           selectedDiagnosticAssessee = null;
           selectedInterviewTeamForPrep = null;
@@ -1632,12 +1649,12 @@ TB.render("component_3", function (data) {
           }
 
           if (assesseeStep) assesseeStep.hidden = false;
-          assesseePicker.classList.add("gaic-open");
+          gibushAiChatOpenModalOverlay(assesseePicker);
       }
-  
+
       function closeTeamPicker() {
           if (!teamPicker) return;
-          teamPicker.classList.remove("gaic-open");
+          gibushAiChatCloseModalOverlay(teamPicker);
           pendingDiagnosticPreset = null;
           selectedDiagnosticTeam = null;
           if (teamConfirmBtn) teamConfirmBtn.disabled = true;
@@ -1659,9 +1676,9 @@ TB.render("component_3", function (data) {
           for (var si = 0; si < selected.length; si++) {
               selected[si].classList.remove("gaic-selected");
           }
-          teamPicker.classList.add("gaic-open");
+          gibushAiChatOpenModalOverlay(teamPicker);
       }
-  
+
       function setSpinnerText(text) {
           if (spinLabel && text) spinLabel.textContent = text;
       }
