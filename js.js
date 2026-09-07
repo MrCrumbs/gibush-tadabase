@@ -2335,6 +2335,282 @@ function updateActivityNumber(activityName, activityNumber){
     localStorage.setItem("gameState", JSON.stringify(activityNumberMap));
 }
 
+/**
+ * Parse spoken race order from STT text against the live roster.
+ * Exact roster id first, else unique suffix match; first occurrence wins on duplicates.
+ */
+function parseRaceOrder(transcription, rosterNumbers) {
+    const roster = (rosterNumbers || []).map(String);
+    const rosterSet = new Set(roster);
+    const ordered = [];
+    const seen = new Set();
+    const unknowns = [];
+    const ambiguous = [];
+    const duplicates = [];
+
+    const text = transcription == null ? "" : String(transcription);
+    const tokens = text.match(/\d+/g) || [];
+
+    for (const token of tokens) {
+        let matched = null;
+
+        if (rosterSet.has(token)) {
+            matched = token;
+        } else {
+            const suffixHits = roster.filter((id) => id.endsWith(token));
+            if (suffixHits.length === 1) {
+                matched = suffixHits[0];
+            } else if (suffixHits.length > 1) {
+                if (!ambiguous.includes(token)) ambiguous.push(token);
+                continue;
+            } else {
+                if (!unknowns.includes(token)) unknowns.push(token);
+                continue;
+            }
+        }
+
+        if (seen.has(matched)) {
+            if (!duplicates.includes(matched)) duplicates.push(matched);
+            continue;
+        }
+        seen.add(matched);
+        ordered.push(matched);
+    }
+
+    return { ordered, unknowns, ambiguous, duplicates };
+}
+
+/** Strip nikud and leading vav used inside Hebrew number phrases (עשרים ואחת). */
+function normalizeHebNumberToken(raw) {
+    let t = String(raw || "")
+        .replace(/[\u0591-\u05C7]/g, "")
+        .replace(/[־–—-]/g, "")
+        .trim();
+    if (!t) return "";
+    if (t.charAt(0) === "ו" && t.length > 1) t = t.slice(1);
+    return t;
+}
+
+var HEB_SERIAL_UNITS = {
+    אחד: 1,
+    אחת: 1,
+    שנים: 2,
+    שניים: 2,
+    שתים: 2,
+    שתיים: 2,
+    שלוש: 3,
+    שלושה: 3,
+    ארבע: 4,
+    ארבעה: 4,
+    חמש: 5,
+    חמישה: 5,
+    שש: 6,
+    שישה: 6,
+    שבע: 7,
+    שבעה: 7,
+    שמונה: 8,
+    תשע: 9,
+    תשעה: 9,
+};
+
+var HEB_SERIAL_TENS = {
+    עשר: 10,
+    עשרה: 10,
+    עשרים: 20,
+    שלושים: 30,
+    ארבעים: 40,
+};
+
+/**
+ * Try to parse a Hebrew serial (1–40) starting at tokens[index].
+ * Returns { value, consumed } or null.
+ */
+function tryParseHebrewSerialAt(tokens, index) {
+    if (index >= tokens.length) return null;
+    const a = normalizeHebNumberToken(tokens[index]);
+    if (!a) return null;
+
+    // teens: <unit> עשר/עשרה  (e.g. שלוש עשרה, אחד עשר)
+    if (index + 1 < tokens.length && HEB_SERIAL_UNITS[a] != null) {
+        const b = normalizeHebNumberToken(tokens[index + 1]);
+        if (b === "עשר" || b === "עשרה") {
+            const teen = 10 + HEB_SERIAL_UNITS[a];
+            if (teen >= 11 && teen <= 19) {
+                return { value: teen, consumed: 2 };
+            }
+        }
+    }
+
+    // tens + optional unit: עשרים ואחת / עשרים ו שלוש / שלושים ושלוש
+    if (HEB_SERIAL_TENS[a] != null && a !== "עשר" && a !== "עשרה") {
+        const tens = HEB_SERIAL_TENS[a];
+        let unitIndex = index + 1;
+        let consumed = 1;
+        // Optional bare vav token between tens and unit (STT sometimes splits "ו")
+        if (
+            unitIndex < tokens.length &&
+            normalizeHebNumberToken(tokens[unitIndex]) === "ו"
+        ) {
+            unitIndex += 1;
+            consumed += 1;
+        }
+        if (unitIndex < tokens.length) {
+            const b = normalizeHebNumberToken(tokens[unitIndex]);
+            if (HEB_SERIAL_UNITS[b] != null) {
+                const n = tens + HEB_SERIAL_UNITS[b];
+                if (n >= 1 && n <= 40) {
+                    return { value: n, consumed: consumed + 1 };
+                }
+            }
+        }
+        // Bare tens only if we did not consume a stray vav without a unit
+        if (consumed === 1 && tens >= 1 && tens <= 40) {
+            return { value: tens, consumed: 1 };
+        }
+    }
+
+    // bare עשר / עשרה = 10
+    if (a === "עשר" || a === "עשרה") {
+        return { value: 10, consumed: 1 };
+    }
+
+    // bare unit 1–9
+    if (HEB_SERIAL_UNITS[a] != null) {
+        return { value: HEB_SERIAL_UNITS[a], consumed: 1 };
+    }
+
+    return null;
+}
+
+/**
+ * Convert race STT text to space-separated full assessee ids.
+ * Users speak serials 1–40 (Hebrew or digits); expand with team*100+serial.
+ * Filler is dropped. Accidental full roster digit ids are kept if exact match.
+ */
+function normalizeRaceTranscript(text, teamNumber, rosterNumbers) {
+    const team = Number(teamNumber);
+    const rosterSet = new Set((rosterNumbers || []).map(String));
+    const expandSerial = (serial) => {
+        if (!Number.isFinite(team) || team <= 0) return String(serial);
+        return String(Math.trunc(team) * 100 + serial);
+    };
+
+    const raw = text == null ? "" : String(text);
+    // Keep Hebrew letters and digits as tokens; everything else is a separator.
+    const tokens = raw.match(/[0-9]+|[\u0590-\u05FF]+/g) || [];
+    const out = [];
+    let i = 0;
+
+    while (i < tokens.length) {
+        const tok = tokens[i];
+
+        if (/^\d+$/.test(tok)) {
+            const n = parseInt(tok, 10);
+            if (Number.isFinite(n) && n >= 1 && n <= 40) {
+                out.push(expandSerial(n));
+            } else if (rosterSet.has(tok)) {
+                out.push(tok);
+            }
+            i += 1;
+            continue;
+        }
+
+        const parsed = tryParseHebrewSerialAt(tokens, i);
+        if (parsed) {
+            out.push(expandSerial(parsed.value));
+            i += parsed.consumed;
+            continue;
+        }
+
+        // Unrecognized Hebrew / filler — skip
+        i += 1;
+    }
+
+    return out.join(" ");
+}
+
+function raceAudioBlobToBase64(audioBlob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result || "";
+            const base64 = String(result).includes(",")
+                ? String(result).split(",")[1]
+                : String(result);
+            resolve(base64);
+        };
+        reader.onerror = () => reject(new Error("Failed to read audio file"));
+        reader.readAsDataURL(audioBlob);
+    });
+}
+
+/** Race voice STT backend: "openai" (Whisper + digit prompt) or "ivrit". */
+var RACE_VOICE_TRANSCRIBE_METHOD = "ivrit";
+/** When true, auto-download the raw recording after each take (for STT model comparison). */
+var RACE_VOICE_DEBUG_DOWNLOAD_AUDIO = true;
+
+function downloadRaceVoiceDebugAudio(audioBlob) {
+    if (!audioBlob || !audioBlob.size) return null;
+    const mime = audioBlob.type || "audio/webm";
+    let ext = "webm";
+    if (mime.includes("mp4")) ext = "mp4";
+    else if (mime.includes("mpeg") || mime.includes("mp3")) ext = "mp3";
+    else if (mime.includes("ogg")) ext = "ogg";
+    else if (mime.includes("wav")) ext = "wav";
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `race-voice-debug-${stamp}.${ext}`;
+    const url = URL.createObjectURL(audioBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    console.log("race voice debug audio downloaded:", filename, "size=", audioBlob.size, "type=", mime);
+    return filename;
+}
+async function transcribeRaceAudio(audioBlob) {
+    const method = RACE_VOICE_TRANSCRIBE_METHOD;
+    const base64Audio = await raceAudioBlobToBase64(audioBlob);
+    const body = {
+        audio_blob: base64Audio,
+        method: method,
+    };
+    // Whisper prompt only applies to openai; ivrit ignores it.
+    if (method === "openai") {
+        const roster = (assesseeNumbers || []).map(String).join(", ");
+        body.prompt =
+            "סדר הגעה של מוערכים. כתוב רק ספרות מופרדות בפסיקים, בלי מילים. " +
+            (roster ? `מספרים אפשריים: ${roster}. ` : "") +
+            "דוגמה: 123, 126, 130, 128";
+    }
+    const response = await fetch("https://misc-ten.vercel.app/transcribe_audio_assessors", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + GIBUSH_API_TOKEN,
+        },
+        body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+        let detail = response.statusText;
+        try {
+            const errBody = await response.json();
+            if (errBody && errBody.error) detail = errBody.error;
+        } catch (e) {
+            /* ignore */
+        }
+        throw new Error(detail || "transcription failed");
+    }
+    const result = await response.json();
+    return {
+        transcription: result.transcription || "",
+        method: method,
+    };
+}
+
 function sprintsOrCrawls(activityName, activityNumber){
     const activityLabel = engToHeb[activityName] || activityName;
     const activityNameDisplay = document.createElement("div");
@@ -2344,6 +2620,7 @@ function sprintsOrCrawls(activityName, activityNumber){
 
     let bracket;
     let orderSection;
+    let bucketSection;
     let currentIndex = 0;
     let currentClone = null;
 
@@ -2523,7 +2800,7 @@ function sprintsOrCrawls(activityName, activityNumber){
         if (!suppressScroll) scrollNewRaceBlockIntoView(blockWrapper);
     }
 
-    const { topButtonContainer, backButton, resetButton, submitButton } = createGameTopToolbar(initialElement, {
+    const { topButtonContainer, actionsRow, backButton, resetButton, submitButton } = createGameTopToolbar(initialElement, {
         onLoadPrevious: async () => {
             if (activityNumber <= 1) {
                 alert("אין מקצה קודם לטעינה.");
@@ -2546,33 +2823,334 @@ function sprintsOrCrawls(activityName, activityNumber){
                 alert("לא נמצאו נתוני מיקום במקצה הקודם.");
                 return;
             }
-            while (bracket.querySelector(".block-wrapper")) {
-                bracket.removeChild(bracket.querySelector(".block-wrapper"));
-            }
-            document.querySelectorAll(".bucket-block").forEach((b) => {
-                b.style.display = "flex";
-            });
-            orderSection.classList.remove("order-section-centered");
-            orderSection.style.width = "";
-            document.querySelector(".bucket-section").style.display = "flex";
-            currentIndex = 0;
-            filtered.forEach((num) => addAssesseeToRaceBracket(num, { suppressScroll: true }));
-            const lastRaceWrapper = bracket.querySelector(".block-wrapper:last-child");
-            scrollNewRaceBlockIntoView(lastRaceWrapper);
-            updateResultString();
+            applyRaceFinishOrder(filtered);
         },
     });
 
+    const voiceRecordButton = document.createElement("button");
+    voiceRecordButton.className = "race-voice-record-button";
+    voiceRecordButton.type = "button";
+    voiceRecordButton.innerHTML = '<i class="fas fa-microphone"></i> מצב הקלטה';
+    // Place before reset (RTL visual: after סדר קודם, before איפוס)
+    if (resetButton && resetButton.parentNode === actionsRow) {
+        actionsRow.insertBefore(voiceRecordButton, resetButton);
+    } else {
+        actionsRow.appendChild(voiceRecordButton);
+    }
+
+    let raceVoiceMediaRecorder = null;
+    let raceVoiceStream = null;
+    let raceVoiceTimeoutId = null;
+    let raceVoiceResolveBlob = null;
+    let raceVoicePhase = "idle"; // idle | recording | processing
+    let raceVoiceStartGeneration = 0;
+    const RACE_VOICE_MAX_MS = 120000;
+
+    function setRaceVoiceButtonIdle() {
+        raceVoicePhase = "idle";
+        voiceRecordButton.disabled = false;
+        voiceRecordButton.classList.remove("recording", "processing");
+        voiceRecordButton.innerHTML = '<i class="fas fa-microphone"></i> מצב הקלטה';
+    }
+
+    function clearRaceBracketForReorder() {
+        while (bracket && bracket.querySelector(".block-wrapper")) {
+            bracket.removeChild(bracket.querySelector(".block-wrapper"));
+        }
+        document.querySelectorAll(".bucket-block").forEach((b) => {
+            b.style.display = "flex";
+        });
+        if (orderSection) {
+            orderSection.classList.remove("order-section-centered");
+            orderSection.style.width = "";
+            orderSection.style.display = "flex";
+        }
+        if (bucketSection) bucketSection.style.display = "flex";
+        currentIndex = 0;
+        raceAssesseesOrder = null;
+    }
+
+    function applyRaceFinishOrder(orderedNumbers) {
+        clearRaceBracketForReorder();
+        orderedNumbers.forEach((num) => addAssesseeToRaceBracket(num, { suppressScroll: true }));
+        const lastRaceWrapper = bracket.querySelector(".block-wrapper:last-child");
+        scrollNewRaceBlockIntoView(lastRaceWrapper);
+        updateResultString();
+    }
+
+    function stopRaceVoiceTracks() {
+        if (raceVoiceStream) {
+            try {
+                raceVoiceStream.getTracks().forEach((track) => track.stop());
+            } catch (e) {
+                console.error(e);
+            }
+            raceVoiceStream = null;
+        }
+        if (raceVoiceTimeoutId) {
+            clearTimeout(raceVoiceTimeoutId);
+            raceVoiceTimeoutId = null;
+        }
+    }
+
+    function finishRaceVoiceBlob(audioBlob) {
+        const resolve = raceVoiceResolveBlob;
+        raceVoiceResolveBlob = null;
+        raceVoiceMediaRecorder = null;
+        stopRaceVoiceTracks();
+        if (typeof resolve === "function") resolve(audioBlob || new Blob());
+    }
+
+    function stopRaceVoiceRecording() {
+        if (!raceVoiceMediaRecorder) return;
+        try {
+            if (raceVoiceMediaRecorder.state === "recording") {
+                if (typeof raceVoiceMediaRecorder.requestData === "function") {
+                    try {
+                        raceVoiceMediaRecorder.requestData();
+                    } catch (e) {
+                        /* ignore */
+                    }
+                }
+                raceVoiceMediaRecorder.stop();
+            } else if (raceVoiceMediaRecorder.state === "inactive") {
+                finishRaceVoiceBlob(new Blob());
+            }
+        } catch (e) {
+            console.error(e);
+            finishRaceVoiceBlob(new Blob());
+        }
+    }
+
+    async function startRaceVoiceRecording() {
+        if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+            throw new Error("getUserMedia unavailable");
+        }
+        if (typeof MediaRecorder === "undefined") {
+            throw new Error("MediaRecorder unavailable");
+        }
+
+        const startGeneration = ++raceVoiceStartGeneration;
+
+        // Call getUserMedia immediately (same pattern as recording.js) so Chrome
+        // keeps the user-gesture and shows the real permission prompt.
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (startGeneration !== raceVoiceStartGeneration) {
+            stream.getTracks().forEach((t) => t.stop());
+            return new Blob();
+        }
+
+        const audioChunks = [];
+        let mediaRecorder;
+        try {
+            mediaRecorder = new MediaRecorder(stream);
+        } catch (e) {
+            stream.getTracks().forEach((t) => t.stop());
+            throw e;
+        }
+
+        if (startGeneration !== raceVoiceStartGeneration) {
+            stream.getTracks().forEach((t) => t.stop());
+            return new Blob();
+        }
+
+        raceVoiceMediaRecorder = mediaRecorder;
+        raceVoiceStream = stream;
+        raceVoicePhase = "recording";
+        // Each take is a full heat order — clear any previous blocks before recording.
+        clearRaceBracketForReorder();
+        voiceRecordButton.classList.remove("processing");
+        voiceRecordButton.classList.add("recording");
+        voiceRecordButton.innerHTML = '<i class="fas fa-stop"></i> עצור הקלטה';
+
+        return new Promise((resolve) => {
+            raceVoiceResolveBlob = resolve;
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data && event.data.size > 0) audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onerror = (event) => {
+                console.error("MediaRecorder error", event);
+                finishRaceVoiceBlob(new Blob());
+            };
+
+            mediaRecorder.onstop = () => {
+                const mime = mediaRecorder.mimeType || "audio/webm";
+                const audioBlob = new Blob(audioChunks, { type: mime });
+                finishRaceVoiceBlob(audioBlob);
+            };
+
+            try {
+                mediaRecorder.start(250);
+            } catch (e) {
+                console.error(e);
+                try {
+                    mediaRecorder.start();
+                } catch (e2) {
+                    console.error(e2);
+                    finishRaceVoiceBlob(new Blob());
+                    return;
+                }
+            }
+
+            raceVoiceTimeoutId = setTimeout(() => {
+                if (mediaRecorder.state === "recording") {
+                    stopRaceVoiceRecording();
+                }
+            }, RACE_VOICE_MAX_MS);
+        });
+    }
+
+    async function processRaceVoiceRecording(audioBlob) {
+        raceVoicePhase = "processing";
+        voiceRecordButton.disabled = true;
+        voiceRecordButton.classList.remove("recording");
+        voiceRecordButton.classList.add("processing");
+        voiceRecordButton.innerHTML = '<i class="fas fa-spinner"></i> מעבד…';
+
+        try {
+            if (!audioBlob || audioBlob.size === 0) {
+                alert("לא נקלט אודיו. נסה שוב.");
+                return;
+            }
+
+            let debugAudioFilename = null;
+            if (RACE_VOICE_DEBUG_DOWNLOAD_AUDIO) {
+                try {
+                    debugAudioFilename = downloadRaceVoiceDebugAudio(audioBlob);
+                } catch (e) {
+                    console.error("race voice debug audio download failed:", e);
+                }
+            }
+
+            let transcription;
+            let transcribeMethod = RACE_VOICE_TRANSCRIBE_METHOD;
+            try {
+                const transcribed = await transcribeRaceAudio(audioBlob);
+                transcription = transcribed.transcription;
+                transcribeMethod = transcribed.method || transcribeMethod;
+            } catch (e) {
+                console.error(e);
+                alert(
+                    "שגיאה בתמלול ההקלטה. נא לנסות שנית." +
+                        (debugAudioFilename ? `\nקובץ אודיו נשמר: ${debugAudioFilename}` : "")
+                );
+                return;
+            }
+
+            const trimmed = (transcription || "").trim();
+            if (!trimmed) {
+                alert(
+                    "לא זוהה טקסט בהקלטה.\nמודל: " +
+                        transcribeMethod +
+                        (debugAudioFilename ? `\nקובץ אודיו נשמר: ${debugAudioFilename}` : "")
+                );
+                return;
+            }
+
+            console.log("race voice transcription:", trimmed, "method:", transcribeMethod);
+            const normalized = normalizeRaceTranscript(
+                trimmed,
+                currentTeamNumber,
+                assesseeNumbers
+            );
+            console.log("race voice normalized:", normalized);
+
+            const parsed = parseRaceOrder(normalized, assesseeNumbers);
+            if (parsed.ordered.length === 0) {
+                alert(
+                    "לא זוהו מספרי מוערכים תקינים מההקלטה.\n" +
+                        `מודל: ${transcribeMethod}\n` +
+                        (debugAudioFilename ? `קובץ אודיו נשמר: ${debugAudioFilename}\n` : "") +
+                        `תמלול גולמי:\n${trimmed}\n` +
+                        `מספרים מנורמלים:\n${normalized || "(ריק)"}`
+                );
+                return;
+            }
+
+            applyRaceFinishOrder(parsed.ordered);
+
+            const mentioned = new Set(parsed.ordered);
+            const missing = assesseeNumbers.map(String).filter((n) => !mentioned.has(n));
+            const debugLines = [
+                `מודל: ${transcribeMethod}`,
+                `זוהו ${parsed.ordered.length} מוערכים: ${parsed.ordered.join(", ")}`,
+            ];
+            if (parsed.unknowns.length) {
+                debugLines.push(`לא זוהו בצוות: ${parsed.unknowns.join(", ")}`);
+            }
+            if (parsed.ambiguous.length) {
+                debugLines.push(`מספרים דו-משמעיים (דולגו): ${parsed.ambiguous.join(", ")}`);
+            }
+            if (parsed.duplicates.length) {
+                debugLines.push(`כפילויות (נשמרה הופעה ראשונה): ${parsed.duplicates.join(", ")}`);
+            }
+            // Always warn when not every active assessee was recognized (option A: still draw matches).
+            if (missing.length) {
+                debugLines.push(`חסרים מהצוות (לא זוהו): ${missing.join(", ")}`);
+            }
+            if (debugAudioFilename) {
+                debugLines.push(`קובץ אודיו נשמר: ${debugAudioFilename}`);
+            }
+            debugLines.push(`תמלול גולמי:\n${trimmed}`);
+            debugLines.push(`מספרים מנורמלים:\n${normalized}`);
+            // Temporary debug alert — always show raw + normalized for model comparison.
+            alert(debugLines.join("\n"));
+        } finally {
+            setRaceVoiceButtonIdle();
+        }
+    }
+
+    voiceRecordButton.addEventListener("click", async () => {
+        if (raceVoicePhase === "processing" || voiceRecordButton.disabled) {
+            return;
+        }
+
+        // Toggle stop while recording (same as recording.js)
+        if (raceVoicePhase === "recording") {
+            stopRaceVoiceRecording();
+            return;
+        }
+
+        try {
+            const audioBlob = await startRaceVoiceRecording();
+            if (!audioBlob || audioBlob.size === 0) {
+                if (raceVoicePhase === "idle") return;
+                setRaceVoiceButtonIdle();
+                alert("לא נקלט אודיו או שההקלטה בוטלה.");
+                return;
+            }
+            await processRaceVoiceRecording(audioBlob);
+        } catch (e) {
+            console.error("race voice start failed:", e);
+            stopRaceVoiceTracks();
+            raceVoiceMediaRecorder = null;
+            raceVoiceResolveBlob = null;
+            setRaceVoiceButtonIdle();
+            const name = e && e.name ? e.name : "";
+            const msg = e && e.message ? String(e.message) : "";
+            let userMsg = "לא ניתן להתחיל הקלטה. בדוק הרשאות מיקרופון ונסה שוב.";
+            if (name === "NotAllowedError" || /Permission|NotAllowed|denied/i.test(msg)) {
+                userMsg =
+                    "הגישה למיקרופון נחסמה או לא אושרה.\n" +
+                    "ב-Chrome: לחץ על מנעול ליד הכתובת → מיקרופון → אפשר, ורענן את הדף.";
+            } else if (/unavailable|MediaRecorder/i.test(msg)) {
+                userMsg = "הדפדפן לא תומך בהקלטה כאן. נסה בדפדפן אחר.";
+            }
+            alert(userMsg);
+        }
+    });
     const instructionsUI = createActivityInstructionsModal(
         initialElement,
-        "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון."
+        "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון. במצב הקלטה אמרו רק את המספרים האחרונים 1–40 בעברית (למשל אחת, שתיים, עשרים ושלוש) — בלי קידומת הצוות. אפשר לתקן ידנית אחר כך."
     );
 
     const gameLayout = document.createElement("div");
     gameLayout.className = "game-layout";
     initialElement.appendChild(gameLayout);
 
-    const bucketSection = document.createElement("div");
+    bucketSection = document.createElement("div");
     bucketSection.className = "bucket-section";
     gameLayout.appendChild(bucketSection);
 
@@ -2614,6 +3192,16 @@ function sprintsOrCrawls(activityName, activityNumber){
 
     // Back to menu button event handler
     backButton.addEventListener("click", () => {
+        if (raceVoicePhase === "recording") {
+            raceVoiceStartGeneration += 1;
+            stopRaceVoiceRecording();
+            finishRaceVoiceBlob(new Blob());
+        }
+        stopRaceVoiceTracks();
+        raceVoiceMediaRecorder = null;
+        raceVoiceResolveBlob = null;
+        raceVoicePhase = "idle";
+
         // Remove all game content (button container and game layout)
         const buttonContainer = initialElement.querySelector('.top-button-container');
         const gameLayout = initialElement.querySelector('.game-layout');

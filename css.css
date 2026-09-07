@@ -10,7 +10,9 @@ div[af-form]{
   display:none;
 }
 
-
+#x_element_page_94{
+    display:none;
+}
 .undo-button {
   display: block;
   margin: 8px auto 12px auto;
@@ -368,6 +370,7 @@ width: 100%;
 .top-button-container.game-top-toolbar .submit-button.submit-button--toolbar,
 .top-button-container.game-top-toolbar .reset-button,
 .top-button-container.game-top-toolbar .load-previous-arrangement-button,
+.top-button-container.game-top-toolbar .race-voice-record-button,
 .top-button-container.game-top-toolbar .undo-button.undo-button--toolbar {
   flex: 1;
   width: auto;
@@ -400,6 +403,59 @@ width: 100%;
 
 .load-previous-arrangement-button:hover {
   background-color: #e3f2fd;
+}
+
+.race-voice-record-button {
+  padding: 10px 12px;
+  background-color: #6a1b9a;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: center;
+  direction: rtl;
+  position: relative;
+  z-index: 5;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: rgba(106, 27, 154, 0.35);
+}
+
+.race-voice-record-button:hover {
+  background-color: #7b1fa2;
+}
+
+.race-voice-record-button.recording {
+  background-color: #c62828;
+  animation: race-voice-pulse 1.2s ease-in-out infinite;
+}
+
+.race-voice-record-button.processing {
+  background-color: #546e7a;
+  cursor: wait;
+}
+
+.race-voice-record-button.processing i {
+  animation: race-voice-spin 0.9s linear infinite;
+}
+
+@keyframes race-voice-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+
+@keyframes race-voice-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Back Button */
