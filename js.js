@@ -2337,7 +2337,7 @@ function updateActivityNumber(activityName, activityNumber){
 
 /**
  * Parse spoken race order from STT text against the live roster.
- * Exact roster id first; short serials (1–40 / ≤2 digits) may unique-suffix-match.
+ * Exact roster id first; short serials (1–50 / ≤2 digits) may unique-suffix-match.
  * Longer tokens (e.g. 101 on team 11) must exact-match — never remap via suffix to 1101.
  * First occurrence wins on duplicates; token order from the text is preserved.
  */
@@ -2361,10 +2361,10 @@ function parseRaceOrder(transcription, rosterNumbers) {
             matched = token;
         } else {
             const n = parseInt(token, 10);
-            // Suffix matching is only for short spoken serials (1–40), not full assessee ids.
+            // Suffix matching is only for short spoken serials (1–50), not full assessee ids.
             // Otherwise 101 wrongly matches roster 1101 on team 11.
             const allowSuffix =
-                token.length <= 2 && Number.isFinite(n) && n >= 1 && n <= 40;
+                token.length <= 2 && Number.isFinite(n) && n >= 1 && n <= 50;
 
             if (allowSuffix) {
                 const suffixHits = roster.filter((id) => id.endsWith(token));
@@ -2402,7 +2402,7 @@ function hebTokenClean(raw) {
         .trim();
 }
 
-/** True if token is a conjunction vav glued to a following word (ושמונה). */
+/** True if token is a conjunction vav glued to a following word (ואחת). */
 function hebTokenHasLeadingVav(raw) {
     const t = hebTokenClean(raw);
     return t.length > 1 && t.charAt(0) === "ו" && t !== "ו";
@@ -2419,7 +2419,7 @@ function normalizeHebNumberToken(raw) {
     return t;
 }
 
-var HEB_NUM_UNITS = {
+var HEB_SERIAL_UNITS = {
     אחד: 1,
     אחת: 1,
     שנים: 2,
@@ -2441,79 +2441,76 @@ var HEB_NUM_UNITS = {
     תשעה: 9,
 };
 
-/** Tens 20–90 only (עשר/עשרה handled separately). */
-var HEB_NUM_TENS = {
+/** Tens used for serials 20–50 only. */
+var HEB_SERIAL_TENS = {
     עשרים: 20,
     שלושים: 30,
     ארבעים: 40,
     חמישים: 50,
-    שישים: 60,
-    שבעים: 70,
-    שמונים: 80,
-    תשעים: 90,
 };
 
-var HEB_NUM_MAX = 1440;
-
 /**
- * Skip a bare "ו" token. Returns { index, consumedExtra }.
- */
-function hebSkipBareVav(tokens, index) {
-    if (index < tokens.length && normalizeHebNumberToken(tokens[index]) === "ו") {
-        return { index: index + 1, consumedExtra: 1 };
-    }
-    return { index: index, consumedExtra: 0 };
-}
-
-/**
- * Parse 1–99 starting at tokens[index].
- * Tens+unit combine ONLY with explicit ו (ושמונה / ו שמונה) — bare "עשרים שמונה" is NOT 28.
- * Teens (ארבע עשרה) do not use ו.
+ * Try to parse a Hebrew serial (1–50 only) starting at tokens[index].
+ * Tens+unit combine ONLY with explicit ו (שלושים ואחד / עשרים ושתיים).
+ * Bare "עשרים שמונה" is two serials (20 then 8). Teens need no ו (שתים עשרה).
+ * Anything else (מאה, אלף, 51+) is not recognized here.
  * Returns { value, consumed } or null.
  */
-function tryParseHebrewBelow100At(tokens, index) {
+function tryParseHebrewSerialAt(tokens, index) {
     if (index >= tokens.length) return null;
-    const raw0 = tokens[index];
-    // A glued leading vav means this token continues a prior magnitude — not a fresh below-100 start.
-    if (hebTokenHasLeadingVav(raw0)) return null;
-    const a = normalizeHebNumberToken(raw0);
+    if (hebTokenHasLeadingVav(tokens[index])) return null;
+
+    const a = normalizeHebNumberToken(tokens[index]);
     if (!a || a === "ו") return null;
 
-    // teens: <unit> עשר/עשרה
-    if (index + 1 < tokens.length && HEB_NUM_UNITS[a] != null) {
+    // teens: <unit> עשר/עשרה  (שתים עשרה, שנים עשר, שלוש עשרה, …)
+    if (index + 1 < tokens.length && HEB_SERIAL_UNITS[a] != null) {
         const b = normalizeHebNumberToken(tokens[index + 1]);
+        // "<unit> מאות" is hundreds speech (unsupported) — skip both, do not treat as serial
+        if (b === "מאות") {
+            return { value: null, consumed: 2, skip: true };
+        }
         if (b === "עשר" || b === "עשרה") {
-            const teen = 10 + HEB_NUM_UNITS[a];
+            const teen = 10 + HEB_SERIAL_UNITS[a];
             if (teen >= 11 && teen <= 19) {
                 return { value: teen, consumed: 2 };
             }
         }
     }
 
-    // tens 20–90 + optional unit ONLY with ו
-    if (HEB_NUM_TENS[a] != null) {
-        const tens = HEB_NUM_TENS[a];
+    // Unsupported magnitude words — consume and ignore
+    if (a === "מאה" || a === "מאתיים" || a === "אלף" || a === "מאות") {
+        return { value: null, consumed: 1, skip: true };
+    }
+
+    // tens + optional unit ONLY with ו (and only if result ≤ 50)
+    if (HEB_SERIAL_TENS[a] != null) {
+        const tens = HEB_SERIAL_TENS[a];
         let unitIndex = index + 1;
         let consumed = 1;
         let hasVav = false;
 
         if (unitIndex < tokens.length && hebTokenHasLeadingVav(tokens[unitIndex])) {
             hasVav = true;
-        } else {
-            const skipped = hebSkipBareVav(tokens, unitIndex);
-            if (skipped.consumedExtra) {
-                hasVav = true;
-                unitIndex = skipped.index;
-                consumed += skipped.consumedExtra;
-            }
+        } else if (
+            unitIndex < tokens.length &&
+            normalizeHebNumberToken(tokens[unitIndex]) === "ו"
+        ) {
+            hasVav = true;
+            unitIndex += 1;
+            consumed += 1;
         }
 
         if (hasVav && unitIndex < tokens.length) {
             const b = normalizeHebNumberToken(tokens[unitIndex]);
-            if (HEB_NUM_UNITS[b] != null) {
-                return { value: tens + HEB_NUM_UNITS[b], consumed: consumed + 1 };
+            if (HEB_SERIAL_UNITS[b] != null) {
+                const n = tens + HEB_SERIAL_UNITS[b];
+                if (n >= 1 && n <= 50) {
+                    return { value: n, consumed: consumed + 1 };
+                }
             }
-            // Stray ו without a unit — treat as bare tens only if we did not consume bare ו
+            // Unsupported compound (e.g. ארבעים ואחד) or stray ו — bare tens only if we
+            // did not consume a separate ו token.
             if (consumed === 1) {
                 return { value: tens, consumed: 1 };
             }
@@ -2527,208 +2524,26 @@ function tryParseHebrewBelow100At(tokens, index) {
         return { value: 10, consumed: 1 };
     }
 
-    if (HEB_NUM_UNITS[a] != null) {
-        return { value: HEB_NUM_UNITS[a], consumed: 1 };
+    if (HEB_SERIAL_UNITS[a] != null) {
+        return { value: HEB_SERIAL_UNITS[a], consumed: 1 };
     }
 
-    return null;
-}
-
-/**
- * Parse hundreds chunk: מאה | מאתיים | <unit> מאות.
- * Returns { value, consumed } or null.
- */
-function tryParseHebrewHundredsAt(tokens, index) {
-    if (index >= tokens.length) return null;
-    if (hebTokenHasLeadingVav(tokens[index])) return null;
-    const a = normalizeHebNumberToken(tokens[index]);
-    if (!a) return null;
-
-    if (a === "מאה") {
-        return { value: 100, consumed: 1 };
-    }
-    if (a === "מאתיים") {
-        return { value: 200, consumed: 1 };
-    }
-    if (HEB_NUM_UNITS[a] != null && index + 1 < tokens.length) {
-        const b = normalizeHebNumberToken(tokens[index + 1]);
-        if (b === "מאות") {
-            return { value: HEB_NUM_UNITS[a] * 100, consumed: 2 };
-        }
-    }
-    return null;
-}
-
-/**
- * After a higher magnitude, optionally consume ו and parse a below-100 remainder.
- * Bare units without ו stay separate list items (מאה שמונה → 100, then 8).
- * Tens/teens may attach with or without ו (מאתיים שלושים, מאה וארבע עשרה).
- */
-function tryParseHebrewRemainderBelow100(tokens, index) {
-    if (index >= tokens.length) return null;
-
-    let i = index;
-    let consumed = 0;
-    let forcedVav = false;
-
-    if (hebTokenHasLeadingVav(tokens[i])) {
-        forcedVav = true;
-        // Peel vav for below-100 parse by synthesizing a non-vav start:
-        // reuse normalize via a local copy of the stripped token.
-    } else {
-        const skipped = hebSkipBareVav(tokens, i);
-        if (skipped.consumedExtra) {
-            forcedVav = true;
-            i = skipped.index;
-            consumed += skipped.consumedExtra;
-            if (i >= tokens.length) return null;
-        }
-    }
-
-    if (forcedVav && hebTokenHasLeadingVav(tokens[i])) {
-        // Parse below-100 from stripped form of this token onward
-        const strippedTok = normalizeHebNumberToken(tokens[i]);
-        const synthetic = tokens.slice();
-        synthetic[i] = strippedTok;
-        const below = tryParseHebrewBelow100At(synthetic, i);
-        if (below) {
-            return { value: below.value, consumed: consumed + below.consumed };
-        }
-        return null;
-    }
-
-    if (forcedVav) {
-        const below = tryParseHebrewBelow100At(tokens, i);
-        if (below) {
-            return { value: below.value, consumed: consumed + below.consumed };
-        }
-        return null;
-    }
-
-    // No vav: allow tens or teens only (not bare units) so "מאה שמונה" stays split
-    const a = normalizeHebNumberToken(tokens[i]);
-    if (HEB_NUM_TENS[a] != null || a === "עשר" || a === "עשרה") {
-        return tryParseHebrewBelow100At(tokens, i);
-    }
-    if (HEB_NUM_UNITS[a] != null && i + 1 < tokens.length) {
-        const b = normalizeHebNumberToken(tokens[i + 1]);
-        if (b === "עשר" || b === "עשרה") {
-            return tryParseHebrewBelow100At(tokens, i);
-        }
-    }
-    return null;
-}
-
-/**
- * Try to parse a Hebrew number 1–1440 starting at tokens[index] (longest match).
- * Returns { value, consumed } or null.
- */
-function tryParseHebrewNumberAt(tokens, index) {
-    if (index >= tokens.length) return null;
-    if (hebTokenHasLeadingVav(tokens[index])) return null;
-
-    let i = index;
-    let value = 0;
-    let consumed = 0;
-
-    // thousands: אלף
-    const a0 = normalizeHebNumberToken(tokens[i]);
-    if (a0 === "אלף") {
-        value += 1000;
-        i += 1;
-        consumed += 1;
-
-        // Optional hundreds after אלף (usually without ו): אלף ארבע מאות
-        if (i < tokens.length) {
-            let hi = i;
-            let hConsumed = 0;
-            if (hebTokenHasLeadingVav(tokens[hi])) {
-                const synthetic = tokens.slice();
-                synthetic[hi] = normalizeHebNumberToken(tokens[hi]);
-                const hund = tryParseHebrewHundredsAt(synthetic, hi);
-                if (hund) {
-                    value += hund.value;
-                    i += hund.consumed;
-                    consumed += hund.consumed;
-                }
-            } else {
-                const skipped = hebSkipBareVav(tokens, hi);
-                if (skipped.consumedExtra) {
-                    hi = skipped.index;
-                    hConsumed = skipped.consumedExtra;
-                }
-                const hund = tryParseHebrewHundredsAt(tokens, hi);
-                if (hund) {
-                    value += hund.value;
-                    i = hi + hund.consumed;
-                    consumed += hConsumed + hund.consumed;
-                }
-            }
-        }
-
-        const rem = tryParseHebrewRemainderBelow100(tokens, i);
-        if (rem) {
-            value += rem.value;
-            i += rem.consumed;
-            consumed += rem.consumed;
-        }
-
-        if (value < 1 || value > HEB_NUM_MAX) return null;
-        return { value: value, consumed: consumed };
-    }
-
-    // hundreds
-    const hund = tryParseHebrewHundredsAt(tokens, i);
-    if (hund) {
-        value += hund.value;
-        i += hund.consumed;
-        consumed += hund.consumed;
-
-        const rem = tryParseHebrewRemainderBelow100(tokens, i);
-        if (rem) {
-            value += rem.value;
-            consumed += rem.consumed;
-        }
-
-        if (value < 1 || value > HEB_NUM_MAX) return null;
-        return { value: value, consumed: consumed };
-    }
-
-    // 1–99 only
-    const below = tryParseHebrewBelow100At(tokens, index);
-    if (below) {
-        if (below.value < 1 || below.value > HEB_NUM_MAX) return null;
-        return below;
-    }
-
-    return null;
-}
-
-/**
- * Map a parsed numeric value to a roster id string, or null to skip.
- * 1–40 → team*100+serial; 100–1440 → absolute; else null.
- */
-function raceValueToAssesseeId(value, teamNumber) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return null;
-    if (n >= 1 && n <= 40) {
-        const team = Number(teamNumber);
-        if (!Number.isFinite(team) || team <= 0) return String(n);
-        return String(Math.trunc(team) * 100 + n);
-    }
-    if (n >= 100 && n <= HEB_NUM_MAX) {
-        return String(n);
-    }
     return null;
 }
 
 /**
  * Convert race STT text to space-separated full assessee ids.
- * Serials 1–40 (Hebrew/digits) expand with team*100; full IDs 100–1440 stay absolute.
- * Filler dropped. Digits that exact-match the live roster are kept.
+ * Only serials 1–50 (Hebrew or digits) are recognized → team*100+serial.
+ * Everything else is ignored. Accidental full roster digit ids are kept if exact match.
+ * Token order from the transcript is preserved.
  */
 function normalizeRaceTranscript(text, teamNumber, rosterNumbers) {
+    const team = Number(teamNumber);
     const rosterSet = new Set((rosterNumbers || []).map(String));
+    const expandSerial = (serial) => {
+        if (!Number.isFinite(team) || team <= 0) return String(serial);
+        return String(Math.trunc(team) * 100 + serial);
+    };
 
     const raw = text == null ? "" : String(text);
     const tokens = raw.match(/[0-9]+|[\u0590-\u05FF]+/g) || [];
@@ -2740,9 +2555,8 @@ function normalizeRaceTranscript(text, teamNumber, rosterNumbers) {
 
         if (/^\d+$/.test(tok)) {
             const n = parseInt(tok, 10);
-            const mapped = raceValueToAssesseeId(n, teamNumber);
-            if (mapped) {
-                out.push(mapped);
+            if (Number.isFinite(n) && n >= 1 && n <= 50) {
+                out.push(expandSerial(n));
             } else if (rosterSet.has(tok)) {
                 out.push(tok);
             }
@@ -2750,10 +2564,11 @@ function normalizeRaceTranscript(text, teamNumber, rosterNumbers) {
             continue;
         }
 
-        const parsed = tryParseHebrewNumberAt(tokens, i);
+        const parsed = tryParseHebrewSerialAt(tokens, i);
         if (parsed) {
-            const mapped = raceValueToAssesseeId(parsed.value, teamNumber);
-            if (mapped) out.push(mapped);
+            if (!parsed.skip && parsed.value != null) {
+                out.push(expandSerial(parsed.value));
+            }
             i += parsed.consumed;
             continue;
         }
@@ -3378,7 +3193,7 @@ function sprintsOrCrawls(activityName, activityNumber){
     });
     const instructionsUI = createActivityInstructionsModal(
         initialElement,
-        "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון. במצב הקלטה אפשר לומר את המספרים האחרונים 1–40 (למשל שמונה, עשרים ושלוש) או את המספר המלא (למשל מאה ושמונה). לצירופים כמו 28 אמרו עם ו: עשרים ושמונה. אפשר לתקן ידנית אחר כך."
+        "דרגו לפי סדר הגעה – הראשון שתבחרו הוא שהגיע ראשון. במצב הקלטה אמרו רק את המספרים האחרונים 1–50 בעברית (למשל אחת, שתיים, שתים עשרה, ארבעים ואחד, חמישים) — בלי קידומת הצוות. לצירופים כמו 28 אמרו עם ו: עשרים ושמונה. אפשר לתקן ידנית אחר כך."
     );
 
     const gameLayout = document.createElement("div");
