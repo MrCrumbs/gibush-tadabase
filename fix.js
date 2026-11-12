@@ -9,11 +9,12 @@ var currentResubmitActivity = null;
 var currentResubmitActivityNumber = null;
 
 // Activity sort order - can be modified to change display order
-var activitySortOrder = ["sprints", "crawls", "sacks", "sociometric_stretcher", "holes", "stretcher"];
+var activitySortOrder = ["sprints", "crawls", "sacks", "sociometric_stretcher", "stretcher", "holes", "odt", "rescue", "gaza", "lectures"];
 
 var engToHebTranslations = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-    "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
+    "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה",
+    "odt": "ODT", "rescue": "הצלת יישוב", "gaza": "כניסה לעזה", "lectures": "הרצאות"
 }
 
 TB.render("component_25", async function (data) {
@@ -166,18 +167,25 @@ function displayActivitiesList() {
     
     const title = document.createElement("h2");
     title.className = "page-title";
-    title.textContent = "תיקון תרגילים";
+    title.textContent = "תיקון תרגילים ומשימות";
     container.appendChild(title);
     
     const activitiesList = document.createElement("div");
     activitiesList.className = "activities-list";
-    
-    Object.keys(activityNumberMapFixGrades).forEach(activityName => {
-        const activityNumbers = activityNumberMapFixGrades[activityName];
-        if (activityNumbers && activityNumbers.length > 0) {
-            const activitySection = createActivitySection(activityName, activityNumbers);
-            activitiesList.appendChild(activitySection);
-        }
+    const groups = [
+        ["תרגילים", ["sprints", "crawls", "sacks", "sociometric_stretcher", "stretcher"]],
+        ["משימות", ["holes", "odt", "rescue", "gaza", "lectures"]],
+    ];
+    groups.forEach(([heading, names]) => {
+        const present = names.filter((name) => (activityNumberMapFixGrades[name] || []).length > 0);
+        if (!present.length) return;
+        const groupTitle = document.createElement("h3");
+        groupTitle.className = "game-menu-heading";
+        groupTitle.textContent = heading;
+        activitiesList.appendChild(groupTitle);
+        present.forEach((activityName) => {
+            activitiesList.appendChild(createActivitySection(activityName, activityNumberMapFixGrades[activityName]));
+        });
     });
     
     container.appendChild(activitiesList);
@@ -267,6 +275,12 @@ function startResubmitActivity(activityName, activityNumber) {
         case "holes":
             holesResubmit(activityNumber);
             break;
+        case "odt":
+        case "rescue":
+        case "gaza":
+        case "lectures":
+            fieldTaskResubmit(activityName, activityNumber);
+            break;
         case "sociometric_stretcher":
             sociometricStretcherResubmit(activityNumber);
             break;
@@ -276,7 +290,7 @@ function startResubmitActivity(activityName, activityNumber) {
     }
 }
 
-async function resubmitActivity(currentTeamNumber, currentTeamID, activityName, activityNumber, resultString) {
+async function resubmitActivity(currentTeamNumber, currentTeamID, activityName, activityNumber, resultString, extra) {
     try {
         const response = await fetch("https://misc-ten.vercel.app/resubmit_activity", {
             method: "POST",
@@ -284,13 +298,13 @@ async function resubmitActivity(currentTeamNumber, currentTeamID, activityName, 
                 "Content-Type": "application/json",
                 "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
-            body: JSON.stringify({
+            body: JSON.stringify(Object.assign({
                 team_number: currentTeamNumber,
                 team_id: currentTeamID,
                 activity_name: activityName,
                 activity_number: activityNumber,
                 results: resultString
-            }),
+            }, extra || {})),
         });
 
         if (!response.ok) {
@@ -640,7 +654,7 @@ function holesResubmit(activityNumber){
         
         // Create first input group (ערבות הדדית)
         const firstInputGroup = createInputGroup(
-            "ערבות הדדית", 
+            "עבודת צוות", 
             "teamwork", 
             assesseeNumber, 
             holesData
@@ -649,7 +663,7 @@ function holesResubmit(activityNumber){
         
         // Create second input group (רוח לחימה ומוטיבציה)
         const secondInputGroup = createInputGroup(
-            "רוח לחימה ומוטיבציה", 
+            "נחישות ואגרסיביות", 
             "determination", 
             assesseeNumber, 
             holesData
@@ -2481,4 +2495,165 @@ function sprintsOrCrawlsResubmit(activityName, activityNumber){
             setActivityTitleBannerContent(banner, activityLabel, activityNumber);
         }
     }
+}
+
+const FIELD_TASK_SPECS = {
+    odt: {
+        help: "בוחרים תרגיל אחד לכל סבב: הולכת לוחם, צינור חול או רשת עכביש. לכל מוערך שני ציונים מ-1 עד 6.",
+        params: [["pressure", "התמודדות עם לחץ ושינויים"], ["integration", "השתלבות בקבוצה"]],
+    },
+    rescue: { help: "לכל מוערך ציון אחד מ-1 עד 6: יכולות בין-אישיות.", params: [["interpersonal", "יכולות בין-אישיות"]] },
+    gaza: { help: "לכל מוערך ציון אחד מ-1 עד 6: השתלבות בקבוצה.", params: [["integration", "השתלבות בקבוצה"]] },
+    lectures: { help: "לכל מוערך ציון אחד מ-1 עד 6: רוח לחימה ומוטיבציה.", params: [["spirit", "רוח לחימה ומוטיבציה"]] },
+};
+const ODT_TYPE_CHOICES = [["walker", "הולכת לוחם"], ["sandpipe", "צינור חול"], ["spiderweb", "רשת עכביש"]];
+
+function chooseOdtTypeForFix() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;direction:rtl;";
+        const box = document.createElement("div");
+        box.style.cssText = "background:#fff;padding:20px;border-radius:12px;min-width:260px;text-align:center;";
+        const title = document.createElement("h3");
+        title.textContent = "איזה תרגיל ODT מדרגים בסבב הזה?";
+        box.appendChild(title);
+        ODT_TYPE_CHOICES.forEach(([id, label]) => {
+            const button = document.createElement("button");
+            button.className = "game-button";
+            button.style.height = "64px";
+            button.style.margin = "8px";
+            button.textContent = label;
+            button.addEventListener("click", () => { overlay.remove(); resolve(id); });
+            box.appendChild(button);
+        });
+        const cancel = document.createElement("button");
+        cancel.textContent = "ביטול";
+        cancel.addEventListener("click", () => { overlay.remove(); resolve(null); });
+        box.appendChild(cancel);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    });
+}
+
+async function fieldTaskResubmit(activityName, activityNumber) {
+    const spec = FIELD_TASK_SPECS[activityName];
+    if (!spec) return;
+    let odtType = null;
+    if (activityName === "odt") {
+        odtType = await chooseOdtTypeForFix();
+        if (!odtType) {
+            goBackToActivitiesList();
+            return;
+        }
+    }
+    let saved = {};
+    try {
+        const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + GIBUSH_API_TOKEN },
+            body: JSON.stringify({ team_number: String(currentTeamNumberFixGrades), activity_names: activityName }),
+        });
+        const payload = await response.json();
+        const teamKey = String(currentTeamNumberFixGrades);
+        const teamData = payload[teamKey] || payload[Number(teamKey)] || {};
+        Object.keys(teamData).forEach((num) => {
+            const heat = teamData[num]?.[activityName]?.[String(activityNumber)];
+            if (!heat) return;
+            const row = {};
+            spec.params.forEach(([key]) => { if (heat[key] != null) row[key] = String(heat[key]); });
+            saved[String(num)] = row;
+            if (!odtType && heat.odt_type) odtType = heat.odt_type;
+        });
+    } catch (error) {
+        console.error(error);
+    }
+
+    const banner = document.createElement("div");
+    banner.className = "activity-name-banner";
+    const typeLabel = ODT_TYPE_CHOICES.find((row) => row[0] === odtType)?.[1] || "";
+    banner.textContent = (engToHebTranslations[activityName] || activityName) + (typeLabel ? " — " + typeLabel : "");
+    initialElementFixGrades.appendChild(banner);
+    const { topButtonContainer, backButton, resetButton, submitButton } = createGameTopToolbar(initialElementFixGrades, { includeLoadPrevious: false });
+    const instructionsUI = createActivityInstructionsModal(initialElementFixGrades, spec.help);
+    const container = document.createElement("div");
+    container.className = "holes-container";
+    initialElementFixGrades.appendChild(container);
+    const list = document.createElement("div");
+    list.className = "assessees-list";
+    container.appendChild(list);
+
+    assesseeNumbersFixGrades.forEach((assesseeNumber) => {
+        const row = document.createElement("div");
+        row.className = "assessee-row";
+        row.dataset.number = assesseeNumber;
+        const groups = document.createElement("div");
+        groups.className = "input-groups-container";
+        spec.params.forEach(([key, label]) => {
+            const group = document.createElement("div");
+            group.className = "input-group";
+            const name = document.createElement("div");
+            name.className = "assessee-number";
+            name.textContent = assesseeNumber + " · " + label;
+            const controls = document.createElement("div");
+            controls.className = "input-container";
+            const input = document.createElement("input");
+            input.type = "number";
+            input.className = "score-input";
+            input.min = "1";
+            input.max = "6";
+            input.value = saved[String(assesseeNumber)]?.[key] || "0";
+            const minus = document.createElement("button");
+            minus.className = "input-button minus-button";
+            minus.textContent = "−";
+            const plus = document.createElement("button");
+            plus.className = "input-button plus-button";
+            plus.textContent = "+";
+            minus.addEventListener("click", () => { input.value = String(Math.max(0, (parseInt(input.value, 10) || 0) - 1)); });
+            plus.addEventListener("click", () => { input.value = String(Math.min(6, (parseInt(input.value, 10) || 0) + 1)); });
+            controls.appendChild(minus);
+            controls.appendChild(input);
+            controls.appendChild(plus);
+            group.appendChild(name);
+            group.appendChild(controls);
+            groups.appendChild(group);
+        });
+        row.appendChild(groups);
+        list.appendChild(row);
+    });
+
+    function close() {
+        container.remove();
+        backButton.remove();
+        topButtonContainer.remove();
+        banner.remove();
+        instructionsUI.destroy();
+        goBackToActivitiesList();
+    }
+    backButton.addEventListener("click", close);
+    resetButton.addEventListener("click", () => {
+        if (!confirm("האם אתה בטוח שברצונך לאפס את כל הנתונים?")) return;
+        list.querySelectorAll(".score-input").forEach((input) => { input.value = "0"; });
+    });
+    submitButton.addEventListener("click", async () => {
+        let ok = true;
+        list.querySelectorAll(".score-input").forEach((input) => {
+            const value = parseInt(input.value, 10) || 0;
+            if (value < 1 || value > 6) { ok = false; input.style.borderColor = "#f44336"; }
+        });
+        if (!ok) { alert("יש לתת ציונים לכל המוערכים."); return; }
+        if (activityName === "odt" && !odtType) { alert("חסר סוג תרגיל ODT."); return; }
+        const parts = [];
+        list.querySelectorAll(".assessee-row").forEach((row) => {
+            const number = row.dataset.number;
+            const scores = Array.from(row.querySelectorAll(".score-input")).map((input) => input.value);
+            parts.push(number + "-" + numberToIdMapFixGrades[number] + ":" + scores.join("-"));
+        });
+        submitButton.disabled = true;
+        const extra = odtType ? { odt_type: odtType } : undefined;
+        const succeeded = await resubmitActivity(currentTeamNumberFixGrades, currentTeamIDFixGrades, activityName, activityNumber, parts.join(","), extra);
+        submitButton.disabled = false;
+        if (!succeeded) { alert("השליחה נכשלה."); return; }
+        showResubmitSuccessToast();
+        close();
+    });
 }
