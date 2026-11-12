@@ -5,7 +5,7 @@ var engToHebTranslations = {
     "sprints": "ספרינטים",
     "crawls": "זחילות",
     "sociometric_stretcher": "אלונקה סוציומטרית",
-    "holes": "חפירת בור",
+    "tasks": "משימות",
     "sacks": "שקים",
     "stretcher": "מסע אלונקה"
 };
@@ -14,7 +14,7 @@ var ACTIVITY_COLUMN_ORDER = [
     "crawls",
     "sociometric_stretcher",
     "sacks",
-    "holes",
+    "tasks",
     "stretcher"
 ];
 
@@ -116,7 +116,7 @@ async function fetchGradesData() {
             },
             body: JSON.stringify({
                 team_number: currentTeamNumberGrades,
-                activity_names: "sprints,crawls,sociometric_stretcher,sacks,holes,stretcher"
+                activity_names: "sprints,crawls,sociometric_stretcher,sacks,stretcher,tasks"
             })
         });
 

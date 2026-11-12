@@ -1,3 +1,68 @@
+/* SilenceChunker — copied from chunker.js (flow-he port, sacks settings). */
+// פורט ל-JS של chunker.py מ-zolo-lab/flow-he (מצב "הקלטה רציפה", cut_at="start")
+class SilenceChunker {
+  constructor({ sr = 16000, minS = 10, maxS = 20, silenceS = 1.5, frameS = 0.03,
+                absTh = 0.004, relTh = 0.25, padS = 0.4, smooth = 5 } = {}) {
+    Object.assign(this, { sr, absTh, relTh, smooth });
+    this.frame = Math.round(frameS * sr);
+    this.minN = Math.round(minS * sr); this.maxN = Math.round(maxS * sr);
+    this.silFrames = Math.max(1, Math.floor(silenceS / frameS));
+    this.padFrames = Math.max(0, Math.floor(padS / frameS));
+    this.buf = new Float32Array(0); this.speech = 0; this.pos = 0;
+  }
+  rms(x) { const n = Math.floor(x.length / this.frame), r = new Float64Array(n);
+    for (let i = 0; i < n; i++) { let s = 0; for (let j = i * this.frame; j < (i + 1) * this.frame; j++) s += x[j] * x[j]; r[i] = Math.sqrt(s / this.frame); }
+    return r; }
+  th() { return Math.max(this.absTh, this.relTh * this.speech); }
+  feed(x) {                      // x: Float32Array במונו 16kHz; מחזיר [{start, audio}] מוכנים לתמלול
+    const b = new Float32Array(this.buf.length + x.length); b.set(this.buf); b.set(x, this.buf.length); this.buf = b;
+    const t = this.th(), loud = Array.from(this.rms(x)).filter(v => v > t);
+    if (loud.length) { const m = loud.reduce((a, c) => a + c, 0) / loud.length; this.speech = this.speech ? 0.9 * this.speech + 0.1 * m : m; }
+    const out = []; let cut;
+    while ((cut = this.findCut()) != null) {
+      out.push({ start: this.pos / this.sr, audio: this.buf.slice(0, cut) });
+      this.buf = this.buf.slice(cut); this.pos += cut;
+    }
+    return out;
+  }
+  findCut() {
+    if (this.buf.length < this.minN) return null;
+    const rms = this.rms(this.buf), k = this.smooth; let q = rms;
+    if (k > 1 && rms.length >= k) {               // חציון נע (~150ms): נשימה לא שוברת שקט
+      const lo = Math.floor(k / 2); q = new Float64Array(rms.length);
+      for (let i = 0; i < rms.length; i++) { const w = [];
+        for (let j = i - lo; j < i - lo + k; j++) w.push(rms[Math.min(rms.length - 1, Math.max(0, j))]);
+        w.sort((a, c) => a - c); q[i] = w[Math.floor(k / 2)]; }
+    }
+    let th = this.th();
+    if (k > 1 && q.length >= 20) {                 // סף לפי רעש הרקע (אחוזון 15), עם תקרה
+      const tail = Array.from(q.slice(-333)).sort((a, c) => a - c);
+      const nf = tail[Math.floor(0.15 * (tail.length - 1))];
+      th = Math.max(th, Math.min(2.5 * nf, 0.012, this.speech ? 0.6 * this.speech : 0.012));
+    }
+    const startF = Math.floor(this.minN / this.frame); let run = 0;
+    for (let i = startF; i < q.length; i++) {
+      run = q[i] < th ? run + 1 : 0;
+      if (run >= this.silFrames) return (i - run + 1 + this.padFrames) * this.frame; // חותכים בתחילת השקט
+    }
+    if (this.buf.length >= this.maxN) {            // אין שקט: חותכים בנקודה השקטה ביותר בשנייה האחרונה
+      const lo = Math.max(startF, Math.floor((this.maxN - this.sr) / this.frame)), hi = Math.floor(this.maxN / this.frame);
+      let best = lo; for (let i = lo; i < hi; i++) if (rms[i] < rms[best]) best = i;
+      return best * this.frame;
+    }
+    return null;
+  }
+  flush() { const r = { start: this.pos / this.sr, audio: this.buf }; this.pos += this.buf.length; this.buf = new Float32Array(0); return r; }
+}
+function isSilent(x, sr = 16000, minSpeechS = 0.2) {   // קטע בלי דיבור — לא שולחים לשרת
+  const f = Math.round(0.03 * sr), n = Math.floor(x.length / f); if (!n) return true;
+  const r = []; for (let i = 0; i < n; i++) { let s = 0; for (let j = i * f; j < (i + 1) * f; j++) s += x[j] * x[j]; r.push(Math.sqrt(s / f)); }
+  const srt = [...r].sort((a, c) => a - c), floor = srt[Math.floor(0.10 * (n - 1))];
+  const th = Math.max(0.004, Math.min(3 * floor, 0.008));
+  return r.filter(v => v > th).length * 0.03 < minSpeechS;
+}
+if (typeof module !== 'undefined') module.exports = { SilenceChunker, isSilent };
+
 var GIBUSH_API_TOKEN = "jfhf3fUVRKuAlHoRqkgcAcv0me3q31Ii0LFawlUa3bQ";
 var initialElement = null;
 var currentGame = null;
@@ -12,7 +77,9 @@ var activityNumberMap = {};
 var numberToIdMap = {};
 var engToHeb = {
     "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-    "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
+    "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה",
+    "odt": "ODT", "rescue": "הצלת יישוב", "gaza": "כניסה לעזה", "lectures": "הרצאות",
+    "tasks": "משימות"
 }
 
 if (!currentTeamNumber) {
@@ -50,6 +117,12 @@ TB.render("component_26", async function (data) {
             break;
         case "holes":
             await holes();
+            break;
+        case "odt":
+        case "rescue":
+        case "gaza":
+        case "lectures":
+            await openFieldTask(currentGame);
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
@@ -149,25 +222,46 @@ function displayMenu(){
     const menuContainer = document.createElement("div");
     menuContainer.id = "game-menu";
 
-    // Menu items
-    const games = [
-        { title: "ספרינטים", translatedTitle: "sprints", icon: "🏃" },
-        { title: "זחילות", translatedTitle: "crawls", icon: "🐛" },
-        { title: "שקים", translatedTitle: "sacks", icon: "🎒" },
-        { title: "בורות", translatedTitle: "holes", icon: "🕳️" },
-        { title: "אלונקה סוציומטרית", translatedTitle: "sociometric_stretcher", icon: "🚑️" },
-        { title: "מסע אלונקה", translatedTitle: "stretcher", icon: "🛏️" }
+    const sections = [
+        {
+            title: "תרגילים",
+            games: [
+                { title: "ספרינטים", translatedTitle: "sprints", icon: "🏃" },
+                { title: "זחילות", translatedTitle: "crawls", icon: "🐛" },
+                { title: "שקים", translatedTitle: "sacks", icon: "🎒" },
+                { title: "אלונקה סוציומטרית", translatedTitle: "sociometric_stretcher", icon: "🚑️" },
+                { title: "מסע אלונקה", translatedTitle: "stretcher", icon: "🛏️" },
+            ],
+        },
+        {
+            title: "משימות",
+            games: [
+                { title: "בורות", translatedTitle: "holes", icon: "🕳️" },
+                { title: "ODT", translatedTitle: "odt", icon: "🧗" },
+                { title: "הצלת יישוב", translatedTitle: "rescue", icon: "🚑" },
+                { title: "כניסה לעזה", translatedTitle: "gaza", icon: "🧭" },
+                { title: "הרצאות", translatedTitle: "lectures", icon: "🎓" },
+            ],
+        },
     ];
 
-    games.forEach(game => {
-        const btn = document.createElement("button");
-        btn.className = "game-button";
-        btn.innerHTML = `<span class="game-icon">${game.icon}</span><span class="game-title">${game.title}</span>`;
-        // Add onclick handler per game
-        btn.addEventListener("click", function () {
-            void runGame(game.translatedTitle);
+    sections.forEach(section => {
+        const heading = document.createElement("h2");
+        heading.className = "game-menu-heading";
+        heading.textContent = section.title;
+        menuContainer.appendChild(heading);
+        const grid = document.createElement("div");
+        grid.className = "game-menu-grid";
+        section.games.forEach(game => {
+            const btn = document.createElement("button");
+            btn.className = "game-button";
+            btn.innerHTML = `<span class="game-icon">${game.icon}</span><span class="game-title">${game.title}</span>`;
+            btn.addEventListener("click", function () {
+                void runGame(game.translatedTitle);
+            });
+            grid.appendChild(btn);
         });
-        menuContainer.appendChild(btn);
+        menuContainer.appendChild(grid);
     });
 
     // Append menu after the initial element
@@ -196,6 +290,12 @@ async function runGame(gameTitle) {
             break;
         case "holes":
             await holes();
+            break;
+        case "odt":
+        case "rescue":
+        case "gaza":
+        case "lectures":
+            await openFieldTask(currentGame);
             break;
         case "sociometric_stretcher":
             sociometricStretcher(nextActivityNumber);
@@ -514,18 +614,18 @@ async function fetchSacksSubmittedDataFromServer(heatNumber) {
     return out;
 }
 
-async function resubmitActivity(currentTeamNumberArg, currentTeamIDArg, activityName, activityNumber, resultString) {
+async function resubmitActivity(currentTeamNumberArg, currentTeamIDArg, activityName, activityNumber, resultString, extra) {
     try {
         const response = await fetch("https://misc-ten.vercel.app/resubmit_activity", {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": "Bearer " + GIBUSH_API_TOKEN },
-            body: JSON.stringify({
+            body: JSON.stringify(Object.assign({
                 team_number: currentTeamNumberArg,
                 team_id: currentTeamIDArg,
                 activity_name: activityName,
                 activity_number: activityNumber,
                 results: resultString,
-            }),
+            }, extra || {})),
         });
         if (!response.ok) {
             console.error("Server returned an error:", response.status);
@@ -616,7 +716,7 @@ async function holes(){
         
         // Create first input group (ערבות הדדית)
         const firstInputGroup = createInputGroup(
-            "ערבות הדדית", 
+            "עבודת צוות", 
             "teamwork", 
             assesseeNumber, 
             holesData
@@ -625,7 +725,7 @@ async function holes(){
         
         // Create second input group (רוח לחימה ומוטיבציה)
         const secondInputGroup = createInputGroup(
-            "רוח לחימה ומוטיבציה", 
+            "נחישות ואגרסיביות", 
             "determination", 
             assesseeNumber, 
             holesData
@@ -835,6 +935,482 @@ async function holes(){
     });
 }
 
+const FIELD_TASKS = {
+    odt: {
+        title: "ODT",
+        help: "בוחרים תרגיל אחד לכל סבב: הולכת לוחם, צינור חול או רשת עכביש. לכל מוערך שני ציונים מ-1 עד 6: התמודדות עם לחץ ושינויים, והשתלבות בקבוצה.",
+        params: [
+            ["pressure", "התמודדות עם לחץ ושינויים"],
+            ["integration", "השתלבות בקבוצה"],
+        ],
+    },
+    rescue: {
+        title: "הצלת יישוב",
+        help: "לכל מוערך ציון אחד מ-1 עד 6: יכולות בין-אישיות.",
+        params: [["interpersonal", "יכולות בין-אישיות"]],
+    },
+    gaza: {
+        title: "כניסה לעזה",
+        help: "לכל מוערך ציון אחד מ-1 עד 6: השתלבות בקבוצה.",
+        params: [["integration", "השתלבות בקבוצה"]],
+    },
+    lectures: {
+        title: "הרצאות",
+        help: "לכל מוערך ציון אחד מ-1 עד 6: רוח לחימה ומוטיבציה.",
+        params: [["spirit", "רוח לחימה ומוטיבציה"]],
+    },
+};
+
+const ODT_TYPE_OPTIONS = [
+    ["walker", "הולכת לוחם"],
+    ["sandpipe", "צינור חול"],
+    ["spiderweb", "רשת עכביש"],
+];
+
+function fieldTaskStorageKey(activityName) {
+    return "fieldTaskData_" + activityName;
+}
+
+function chooseOdtType() {
+    return new Promise((resolve) => {
+        const overlay = document.createElement("div");
+        overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:10000;direction:rtl;";
+        const box = document.createElement("div");
+        box.style.cssText = "background:#fff;padding:20px;border-radius:12px;min-width:260px;text-align:center;";
+        const title = document.createElement("h3");
+        title.textContent = "איזה תרגיל ODT מדרגים בסבב הזה?";
+        box.appendChild(title);
+        ODT_TYPE_OPTIONS.forEach(([id, label]) => {
+            const button = document.createElement("button");
+            button.className = "game-button";
+            button.style.height = "64px";
+            button.style.margin = "8px";
+            button.textContent = label;
+            button.addEventListener("click", () => {
+                overlay.remove();
+                resolve(id);
+            });
+            box.appendChild(button);
+        });
+        const cancel = document.createElement("button");
+        cancel.textContent = "ביטול";
+        cancel.addEventListener("click", () => {
+            overlay.remove();
+            resolve(null);
+        });
+        box.appendChild(cancel);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+    });
+}
+
+async function fetchFieldTaskFromServer(activityName, activityNumber, params) {
+    const response = await fetch("https://misc-ten.vercel.app/get_team_activity_data", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + GIBUSH_API_TOKEN,
+        },
+        body: JSON.stringify({
+            team_number: String(currentTeamNumber),
+            activity_names: activityName,
+        }),
+    });
+    if (!response.ok) return {};
+    const payload = await response.json();
+    const teamData = getTeamDataFromActivityResponse(payload);
+    const out = {};
+    const heatKey = String(activityNumber);
+    Object.keys(teamData || {}).forEach((assesseeNum) => {
+        const heat = teamData[assesseeNum]?.[activityName]?.[heatKey];
+        if (!heat || typeof heat !== "object") return;
+        const row = {};
+        params.forEach(([key]) => {
+            const value = parseInt(heat[key], 10);
+            if (value >= 1 && value <= 6) row[key] = String(value);
+        });
+        if (Object.keys(row).length === params.length) out[String(assesseeNum)] = row;
+    });
+    return out;
+}
+
+function fieldTaskLocalUsable(data, params) {
+    if (!data || typeof data !== "object") return false;
+    return assesseeNumbers.every((num) => {
+        const row = data[String(num)];
+        return params.every(([key]) => {
+            const value = parseInt(row?.[key], 10);
+            return value >= 1 && value <= 6;
+        });
+    });
+}
+
+async function openFieldTask(activityName) {
+    const spec = FIELD_TASKS[activityName];
+    if (!spec) return;
+    let odtType = null;
+    if (activityName === "odt") {
+        odtType = await chooseOdtType();
+        if (!odtType) {
+            currentGame = null;
+            displayMenu();
+            return;
+        }
+    }
+
+    showLoading();
+    await syncActivityNumbers();
+    hideLoading();
+    const gameState = activityNumberMap || JSON.parse(localStorage.getItem("gameState") || "{}");
+    const heats = gameState[activityName] || [];
+    let resubmitHeat = null;
+    const storageKey = fieldTaskStorageKey(activityName);
+
+    if (heats.length > 0) {
+        if (!confirm("מקצה זה כבר הוגש. האם ברצונך לתקנו?")) {
+            currentGame = null;
+            displayMenu();
+            return;
+        }
+        resubmitHeat = Math.max(...heats.map(Number));
+        const fromLocal = JSON.parse(localStorage.getItem(storageKey) || "{}");
+        if (!fieldTaskLocalUsable(fromLocal, spec.params)) {
+            showLoading();
+            let fetched = {};
+            try {
+                fetched = await fetchFieldTaskFromServer(activityName, resubmitHeat, spec.params);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                hideLoading();
+            }
+            if (!fieldTaskLocalUsable(fetched, spec.params)) {
+                alert("לא ניתן לטעון את נתוני המקצה מהשרת.");
+                currentGame = null;
+                displayMenu();
+                return;
+            }
+            localStorage.setItem(storageKey, JSON.stringify(fetched));
+        }
+    }
+
+    const activityNameDisplay = document.createElement("div");
+    activityNameDisplay.className = "activity-name-banner";
+    const typeLabel = odtType ? ODT_TYPE_OPTIONS.find((row) => row[0] === odtType)?.[1] : "";
+    activityNameDisplay.textContent = typeLabel ? spec.title + " — " + typeLabel : spec.title;
+    initialElement.appendChild(activityNameDisplay);
+
+    const { topButtonContainer, backButton, resetButton, submitButton } = createGameTopToolbar(initialElement, {
+        includeLoadPrevious: false,
+    });
+    const instructionsUI = createActivityInstructionsModal(initialElement, spec.help);
+    const container = document.createElement("div");
+    container.className = "holes-container";
+    initialElement.appendChild(container);
+    const list = document.createElement("div");
+    list.className = "assessees-list";
+    container.appendChild(list);
+    const saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+
+    function save() {
+        const data = {};
+        list.querySelectorAll(".assessee-row").forEach((row) => {
+            const number = row.dataset.number;
+            data[number] = {};
+            spec.params.forEach(([key], index) => {
+                data[number][key] = row.querySelectorAll(".score-input")[index].value;
+            });
+        });
+        localStorage.setItem(storageKey, JSON.stringify(data));
+    }
+
+    assesseeNumbers.forEach((assesseeNumber) => {
+        const row = document.createElement("div");
+        row.className = "assessee-row";
+        row.dataset.number = assesseeNumber;
+        const groups = document.createElement("div");
+        groups.className = "input-groups-container";
+        spec.params.forEach(([key, label]) => {
+            const group = document.createElement("div");
+            group.className = "input-group";
+            const name = document.createElement("div");
+            name.className = "assessee-number";
+            name.textContent = assesseeNumber + " · " + label;
+            const controls = document.createElement("div");
+            controls.className = "input-container";
+            const minus = document.createElement("button");
+            minus.className = "input-button minus-button";
+            minus.textContent = "−";
+            const input = document.createElement("input");
+            input.type = "number";
+            input.className = "score-input";
+            input.min = "0";
+            input.max = "6";
+            input.value = saved[assesseeNumber]?.[key] || "0";
+            const plus = document.createElement("button");
+            plus.className = "input-button plus-button";
+            plus.textContent = "+";
+            const clamp = () => {
+                let value = parseInt(input.value, 10) || 0;
+                if (value > 6) value = 6;
+                if (value < 0) value = 0;
+                input.value = String(value);
+                input.style.borderColor = value > 0 ? "#ddd" : "#f44336";
+                save();
+            };
+            input.addEventListener("input", clamp);
+            minus.addEventListener("click", () => {
+                input.value = String(Math.max(0, (parseInt(input.value, 10) || 0) - 1));
+                clamp();
+            });
+            plus.addEventListener("click", () => {
+                input.value = String(Math.min(6, (parseInt(input.value, 10) || 0) + 1));
+                clamp();
+            });
+            controls.appendChild(minus);
+            controls.appendChild(input);
+            controls.appendChild(plus);
+            group.appendChild(name);
+            group.appendChild(controls);
+            groups.appendChild(group);
+        });
+        row.appendChild(groups);
+        list.appendChild(row);
+    });
+
+    function valid() {
+        let ok = true;
+        list.querySelectorAll(".score-input").forEach((input) => {
+            const value = parseInt(input.value, 10) || 0;
+            if (value < 1 || value > 6) {
+                ok = false;
+                input.style.borderColor = "#f44336";
+            }
+        });
+        return ok;
+    }
+
+    function resultString() {
+        const parts = [];
+        list.querySelectorAll(".assessee-row").forEach((row) => {
+            const number = row.dataset.number;
+            const id = numberToIdMap[number];
+            const scores = Array.from(row.querySelectorAll(".score-input")).map((input) => input.value);
+            parts.push(number + "-" + id + ":" + scores.join("-"));
+        });
+        return parts.join(",");
+    }
+
+    function close() {
+        container.remove();
+        backButton.remove();
+        topButtonContainer.remove();
+        activityNameDisplay.remove();
+        instructionsUI.destroy();
+        currentGame = null;
+        displayMenu();
+    }
+
+    backButton.addEventListener("click", close);
+    resetButton.addEventListener("click", () => {
+        if (!confirm("האם אתה בטוח שברצונך לאפס את כל הנתונים?")) return;
+        localStorage.removeItem(storageKey);
+        list.querySelectorAll(".score-input").forEach((input) => {
+            input.value = "0";
+        });
+    });
+    submitButton.addEventListener("click", async () => {
+        if (!valid()) {
+            alert("יש לתת ציונים לכל המוערכים.");
+            return;
+        }
+        submitButton.disabled = true;
+        submitButton.textContent = "שולח...";
+        const extra = odtType ? { odt_type: odtType } : undefined;
+        const succeeded = resubmitHeat != null
+            ? await resubmitActivity(currentTeamNumber, currentTeamID, activityName, resubmitHeat, resultString(), extra)
+            : await submitActivity(currentTeamNumber, currentTeamID, activityName, 1, resultString(), extra);
+        submitButton.disabled = false;
+        submitButton.innerHTML = '<i class="fas fa-paper-plane"></i> שליחה';
+        if (!succeeded) {
+            alert("השליחה נכשלה.");
+            return;
+        }
+        showSuccessToast();
+        localStorage.removeItem(storageKey);
+        if (resubmitHeat == null) updateActivityNumber(activityName, 1);
+        close();
+    });
+}
+
+function encodeWavPcm16(samples, sampleRate) {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const write = (offset, text) => {
+        for (let i = 0; i < text.length; i++) view.setUint8(offset + i, text.charCodeAt(i));
+    };
+    write(0, "RIFF");
+    view.setUint32(4, 36 + samples.length * 2, true);
+    write(8, "WAVE");
+    write(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    write(36, "data");
+    view.setUint32(40, samples.length * 2, true);
+    let offset = 44;
+    for (let i = 0; i < samples.length; i++, offset += 2) {
+        const sample = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+    }
+    return new Blob([buffer], { type: "audio/wav" });
+}
+
+function resampleTo16k(input, fromRate) {
+    if (fromRate === 16000) return input;
+    const length = Math.max(1, Math.round(input.length * 16000 / fromRate));
+    const out = new Float32Array(length);
+    const ratio = fromRate / 16000;
+    for (let i = 0; i < length; i++) {
+        const pos = i * ratio;
+        const idx = Math.floor(pos);
+        const frac = pos - idx;
+        const a = input[idx] || 0;
+        const b = input[Math.min(idx + 1, input.length - 1)] || a;
+        out[i] = a + (b - a) * frac;
+    }
+    return out;
+}
+
+function attachSacksRecorder(actionsRow, resetButton, onNumber, setSubmitBlocked) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "undo-button undo-button--toolbar record-button--toolbar";
+    button.textContent = "הקלטה";
+    actionsRow.insertBefore(button, resetButton);
+    let recording = false;
+    let pending = 0;
+    let audioContext = null;
+    let processor = null;
+    let stream = null;
+    let chunker = null;
+    let wakeLock = null;
+    const inflight = [];
+    const roster = new Set((assesseeNumbers || []).map(String));
+
+    function refresh() {
+        button.textContent = recording ? "עצירת הקלטה" : "הקלטה";
+        button.classList.toggle("is-recording", recording);
+        setSubmitBlocked(recording || pending > 0, recording ? "עוצרים את ההקלטה לפני שליחה." : "ממתינים שהתמלול יחזור.");
+    }
+
+    async function sendChunk(chunk) {
+        if (!chunk || !chunk.audio || !chunk.audio.length || isSilent(chunk.audio)) return;
+        pending += 1;
+        refresh();
+        const startSec = Math.floor(chunk.start);
+        const endSec = Math.ceil(chunk.start + chunk.audio.length / 16000);
+        const wav = encodeWavPcm16(chunk.audio, 16000);
+        let failed = true;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const result = await transcribeRaceAudio(wav);
+                const expanded = normalizeRaceTranscript(result.transcription || "", currentTeamNumber, assesseeNumbers);
+                expanded.split(/\s+/).filter(Boolean).forEach((id) => {
+                    if (roster.has(String(id))) onNumber(String(id));
+                });
+                failed = false;
+                break;
+            } catch (error) {
+                console.error("sacks transcription attempt failed", error);
+            }
+        }
+        pending -= 1;
+        refresh();
+        if (failed) alert("קטע משנייה " + startSec + " עד " + endSec + " לא תומלל.");
+    }
+
+    function enqueue(chunk) {
+        const job = sendChunk(chunk);
+        inflight.push(job);
+        job.finally(() => {
+            const index = inflight.indexOf(job);
+            if (index >= 0) inflight.splice(index, 1);
+        });
+    }
+
+    async function stop() {
+        if (!recording && !audioContext) {
+            await Promise.all(inflight.slice());
+            return;
+        }
+        recording = false;
+        if (processor) processor.disconnect();
+        if (stream) stream.getTracks().forEach((track) => track.stop());
+        if (wakeLock) {
+            try { await wakeLock.release(); } catch (e) { /* ignore */ }
+            wakeLock = null;
+        }
+        if (chunker) {
+            const tail = chunker.flush();
+            if (tail) enqueue(tail);
+            chunker = null;
+        }
+        if (audioContext) {
+            try { await audioContext.close(); } catch (e) { /* ignore */ }
+            audioContext = null;
+        }
+        processor = null;
+        stream = null;
+        refresh();
+        await Promise.all(inflight.slice());
+        refresh();
+    }
+
+    button.addEventListener("click", async () => {
+        if (recording) {
+            button.disabled = true;
+            await stop();
+            button.disabled = false;
+            return;
+        }
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            processor = audioContext.createScriptProcessor(4096, 1, 1);
+            chunker = new SilenceChunker({ sr: 16000, minS: 10, maxS: 20, silenceS: 1.5, padS: 0.4 });
+            processor.onaudioprocess = (event) => {
+                if (!chunker) return;
+                const input = event.inputBuffer.getChannelData(0);
+                const pieces = chunker.feed(resampleTo16k(input, audioContext.sampleRate));
+                (pieces || []).forEach(enqueue);
+            };
+            const mute = audioContext.createGain();
+            mute.gain.value = 0;
+            source.connect(processor);
+            processor.connect(mute);
+            mute.connect(audioContext.destination);
+            recording = true;
+            if (navigator.wakeLock) {
+                try { wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { /* ignore */ }
+            }
+            refresh();
+        } catch (error) {
+            console.error(error);
+            alert("לא ניתן להתחיל הקלטה.");
+            await stop();
+        }
+    });
+
+    return { stop, isBusy: () => recording || pending > 0 };
+}
+
+
 async function sacks(activityNumber){
     // Create and display the activity name banner
     const activityNameDisplay = document.createElement("div");
@@ -848,11 +1424,12 @@ async function sacks(activityNumber){
     
     const instructionsUI = createActivityInstructionsModal(
         initialElement,
-        "לחיצה על הכדור מוסיפה הקפה. לחיצה ארוכה להורדת הקפות."
+        "לחיצה על הכדור מוסיפה הקפה. לחיצה ארוכה להורדת הקפות. הקלטה רציפה מוסיפה הקפה לכל מספר שנאמר."
     );
     
     // Undo button (cancel last action)
     const actionStack = [];
+    let sacksRecorder = null;
     const undoButton = document.createElement("button");
     undoButton.className = "undo-button undo-button--toolbar";
     undoButton.innerHTML = '<i class="fas fa-forward"></i> בטל';
@@ -879,6 +1456,20 @@ async function sacks(activityNumber){
         }
     });
     actionsRow.insertBefore(undoButton, resetButton);
+    function addSacksLap(assesseeNumber) {
+        const card = document.querySelector(`.assessee-card[data-number="${assesseeNumber}"]`);
+        const lapCounter = card?.querySelector(".lap-counter");
+        if (!lapCounter) return;
+        const current = parseInt(lapCounter.textContent) || 0;
+        lapCounter.textContent = String(current + 1);
+        actionStack.push({ number: String(assesseeNumber), delta: +1 });
+        updateUndoButtonState();
+        saveSacksData();
+        appendHistoryChip(assesseeNumber);
+    }
+    sacksRecorder = attachSacksRecorder(actionsRow, resetButton, addSacksLap, (blocked, message) => {
+        submitButton.dataset.blockReason = blocked ? message : "";
+    });
     
     // Create main container
     const sacksContainer = document.createElement("div");
@@ -1046,14 +1637,7 @@ async function sacks(activityNumber){
 
         ball.addEventListener("pointerup", (e) => {
             e.preventDefault();
-            if (!longPressTriggered) {
-                const currentCount = parseInt(lapCounter.textContent) || 0;
-                lapCounter.textContent = (currentCount + 1).toString();
-                actionStack.push({ number: assesseeNumber, delta: +1 });
-                updateUndoButtonState();
-                saveSacksData();
-                appendHistoryChip(assesseeNumber);
-            }
+            if (!longPressTriggered) addSacksLap(assesseeNumber);
             clearPressTimer();
             scheduleHidePressIndicator();
         });
@@ -1073,7 +1657,8 @@ async function sacks(activityNumber){
     });
     
     // Back button event
-    backButton.addEventListener("click", () => {
+    backButton.addEventListener("click", async () => {
+        if (sacksRecorder) await sacksRecorder.stop();
         // Remove all created elements after initialElement
         hidePressIndicator();
         clearHistoryEntries();
@@ -1107,6 +1692,10 @@ async function sacks(activityNumber){
     
     // Submit button event
     submitButton.addEventListener("click", async () => {
+        if (submitButton.dataset.blockReason) {
+            alert(submitButton.dataset.blockReason);
+            return;
+        }
         // Show loading
         showLoading();
         
@@ -3433,7 +4022,7 @@ async function fetchPreviousHeatRaceOrder(teamNumber, redisActivityName, previou
     return entries.map((e) => e.num);
 }
 
-async function submitActivity(currentTeamNumber, currentTeamID, activityName, activityNumber, resultString){
+async function submitActivity(currentTeamNumber, currentTeamID, activityName, activityNumber, resultString, extra){
     try {
         const response = await fetch("https://misc-ten.vercel.app/submit_activity", {
             method: "POST",
@@ -3441,13 +4030,13 @@ async function submitActivity(currentTeamNumber, currentTeamID, activityName, ac
                 "Content-Type": "application/json",
                 "Authorization": "Bearer " + GIBUSH_API_TOKEN
             },
-            body: JSON.stringify({
+            body: JSON.stringify(Object.assign({
                 team_number: currentTeamNumber,
                 team_id: currentTeamID,
                 activity_name: activityName,
                 activity_number: activityNumber,
                 results: resultString
-            }),
+            }, extra || {})),
         });
 
         if (!response.ok) {

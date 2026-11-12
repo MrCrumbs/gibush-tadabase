@@ -53,7 +53,8 @@ function hideLoading() {
 function showActivityStatus(data) {
     var engToHebTranslations = {
         "sprints": "ספרינטים", "crawls": "זחילות", "sociometric_stretcher": "אלונקה סוציומטרית", 
-        "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה"
+        "holes": "חפירת בור", "sacks": "שקים", "stretcher": "מסע אלונקה",
+        "odt": "ODT", "rescue": "הצלת יישוב", "gaza": "כניסה לעזה", "lectures": "הרצאות"
     }
     
     // Remove existing table if present
@@ -69,8 +70,12 @@ function showActivityStatus(data) {
         'crawls',
         'sociometric_stretcher',
         'sacks',
+        'stretcher',
         'holes',
-        'stretcher'
+        'odt',
+        'rescue',
+        'gaza',
+        'lectures'
     ];
 
     // Helper to compute the maximum numeric value from an array of strings
